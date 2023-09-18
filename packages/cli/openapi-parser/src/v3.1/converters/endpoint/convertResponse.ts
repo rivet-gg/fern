@@ -1,8 +1,8 @@
 import { assertNever } from "@fern-api/core-utils";
 import { Response, StatusCode } from "@fern-fern/openapi-ir-model/ir";
 import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../../../utils/isReferenceObject";
-import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3_1ParserContext";
+import { isReferenceObject } from "../../utils/isReferenceObject";
 import { convertSchema } from "../convertSchemas";
 
 const APPLICATION_JSON_CONTENT = "application/json";

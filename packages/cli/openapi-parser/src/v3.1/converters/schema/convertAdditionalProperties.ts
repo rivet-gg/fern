@@ -1,7 +1,7 @@
 import { PrimitiveSchemaValue, Schema } from "@fern-fern/openapi-ir-model/ir";
 import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../../../utils/isReferenceObject";
-import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3_1ParserContext";
+import { isReferenceObject } from "../../utils/isReferenceObject";
 import { convertSchema } from "../convertSchemas";
 
 export function convertAdditionalProperties({

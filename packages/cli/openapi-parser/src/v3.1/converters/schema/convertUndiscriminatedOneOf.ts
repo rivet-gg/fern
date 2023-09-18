@@ -1,9 +1,9 @@
 import { Schema } from "@fern-fern/openapi-ir-model/ir";
 import { difference } from "lodash-es";
 import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../../../utils/isReferenceObject";
 import { isSchemaEqual } from "../../../utils/isSchemaEqual";
-import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3_1ParserContext";
+import { isReferenceObject } from "../../utils/isReferenceObject";
 import { convertSchema } from "../convertSchemas";
 import { convertEnum, convertNumberToSnakeCase } from "./convertEnum";
 

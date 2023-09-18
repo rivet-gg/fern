@@ -7,10 +7,10 @@ import {
     Schema,
 } from "@fern-fern/openapi-ir-model/ir";
 import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../../../utils/isReferenceObject";
-import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3ParserContext";
-import { getVariableReference } from "../../extensions/getVariableReference";
-import { convertSchema } from "../convertSchemas";
+import { getVariableReference } from "../extensions/getVariableReference";
+import { AbstractOpenAPIV3_1ParserContext } from "../v3.1/AbstractOpenAPIV3_1ParserContext";
+import { convertSchema } from "../v3.1/converters/convertSchemas";
+import { isReferenceObject } from "../v3.1/utils/isReferenceObject";
 
 export interface ConvertedParameters {
     pathParameters: PathParameter[];
@@ -28,7 +28,7 @@ export function convertParameters({
     path: string;
     httpMethod: HttpMethod;
     parameters: (OpenAPIV3.ReferenceObject | OpenAPIV3.ParameterObject)[];
-    context: AbstractOpenAPIV3ParserContext;
+    context: AbstractOpenAPIParserContext;
     requestBreadcrumbs: string[];
 }): ConvertedParameters {
     const convertedParameters: ConvertedParameters = {

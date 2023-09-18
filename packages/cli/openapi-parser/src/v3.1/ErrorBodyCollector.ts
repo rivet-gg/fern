@@ -1,21 +1,21 @@
 import { Schema } from "@fern-fern/openapi-ir-model/ir";
-import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../utils/isReferenceObject";
+import { OpenAPIV3_1 } from "openapi-types";
 import { isSchemaEqual } from "../utils/isSchemaEqual";
-import { AbstractOpenAPIV3ParserContext } from "./AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3_1ParserContext } from "./AbstractOpenAPIV3_1ParserContext";
 import { convertSchema } from "./converters/convertSchemas";
+import { isReferenceObject } from "./utils/isReferenceObject";
 
 export class ErrorBodyCollector {
     private references: Set<string> = new Set();
-    private schemas: (OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject)[] = [];
+    private schemas: (OpenAPIV3_1.ReferenceObject | OpenAPIV3_1.SchemaObject)[] = [];
     private convertedSchemas: Schema[] = [];
-    private context: AbstractOpenAPIV3ParserContext;
+    private context: AbstractOpenAPIV3_1ParserContext;
 
-    constructor(context: AbstractOpenAPIV3ParserContext) {
+    constructor(context: AbstractOpenAPIV3_1ParserContext) {
         this.context = context;
     }
 
-    public collect(schema: OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject): void {
+    public collect(schema: OpenAPIV3_1.ReferenceObject | OpenAPIV3_1.SchemaObject): void {
         if (isReferenceObject(schema)) {
             if (this.references.has(schema.$ref)) {
                 // skip
@@ -39,7 +39,7 @@ export class ErrorBodyCollector {
         }
     }
 
-    public getSchemas(): (OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject)[] {
+    public getSchemas(): (OpenAPIV3_1.ReferenceObject | OpenAPIV3_1.SchemaObject)[] {
         return this.schemas;
     }
 }

@@ -1,8 +1,8 @@
-import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../../utils/isReferenceObject";
+import { OpenAPIV3_1 } from "openapi-types";
 import { APPLICATION_JSON_CONTENT, MULTIPART_CONTENT } from "../converters/endpoint/convertRequest";
+import { isReferenceObject } from "./isReferenceObject";
 
-export function getReferenceOccurrences(document: OpenAPIV3.Document): Record<string, number> {
+export function getReferenceOccurrences(document: OpenAPIV3_1.Document): Record<string, number> {
     const contentConflictsRemovedDocument = removeApplicationJsonAndMultipartConflictsFromDocument(document);
     const occurrences: Record<string, number> = {};
     getReferenceOccurrencesHelper({ obj: contentConflictsRemovedDocument, occurrences, breadcrumbs: [] });
@@ -56,11 +56,11 @@ function getReferenceOccurrencesHelper({
     }
 }
 
-function removeApplicationJsonAndMultipartConflictsFromDocument(document: OpenAPIV3.Document): OpenAPIV3.Document {
+function removeApplicationJsonAndMultipartConflictsFromDocument(document: OpenAPIV3_1.Document): OpenAPIV3_1.Document {
     return {
         ...document,
         paths: Object.fromEntries(
-            Object.entries(document.paths).map(([path, pathItem]) => {
+            Object.entries(document.paths ?? {}).map(([path, pathItem]) => {
                 return [
                     path,
                     {
@@ -93,8 +93,8 @@ function removeApplicationJsonAndMultipartConflictsFromDocument(document: OpenAP
 }
 
 function removeApplicationJsonAndMultipartConflictsFromOperationObject(
-    operationObject: OpenAPIV3.OperationObject
-): OpenAPIV3.OperationObject {
+    operationObject: OpenAPIV3_1.OperationObject
+): OpenAPIV3_1.OperationObject {
     return {
         ...operationObject,
         requestBody:
@@ -107,8 +107,8 @@ function removeApplicationJsonAndMultipartConflictsFromOperationObject(
 }
 
 function removeApplicationJsonAndMultipartConflictsFromRequestBody(
-    requestBody: OpenAPIV3.RequestBodyObject
-): OpenAPIV3.RequestBodyObject {
+    requestBody: OpenAPIV3_1.RequestBodyObject
+): OpenAPIV3_1.RequestBodyObject {
     const jsonContent = requestBody.content[APPLICATION_JSON_CONTENT];
     const multipartContent = requestBody.content[MULTIPART_CONTENT];
     if (multipartContent != null && jsonContent != null) {

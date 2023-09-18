@@ -8,9 +8,9 @@ import {
 } from "@fern-fern/openapi-ir-model/ir";
 import { OpenAPIV3 } from "openapi-types";
 import { getGeneratedPropertyName } from "../../../utils/getSchemaName";
-import { isReferenceObject } from "../../../utils/isReferenceObject";
 import { isSchemaEqual } from "../../../utils/isSchemaEqual";
-import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3_1ParserContext";
+import { isReferenceObject } from "../../utils/isReferenceObject";
 import { convertSchema, convertToReferencedSchema, getSchemaIdFromReference } from "../convertSchemas";
 
 interface ReferencedAllOfInfo {

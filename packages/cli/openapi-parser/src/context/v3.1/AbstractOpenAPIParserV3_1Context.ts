@@ -1,7 +1,7 @@
 import { Logger } from "@fern-api/logger";
 import { TaskContext } from "@fern-api/task-context";
 import { HttpError, SchemaId, StatusCode } from "@fern-fern/openapi-ir-model/ir";
-import { OpenAPIV3 } from "openapi-types";
+import { OpenAPIV3, OpenAPIV3_1 } from "openapi-types";
 import { isReferenceObject } from "../utils/isReferenceObject";
 import { SCHEMA_REFERENCE_PREFIX } from "./converters/convertSchemas";
 import { getReferenceOccurrences } from "./utils/getReferenceOccurrences";
@@ -15,9 +15,11 @@ export interface DiscriminatedUnionReference {
     numReferences: number;
 }
 
+type OpenAPIReferenceObject = OpenAPIV3.ReferenceObject | OpenAPIV3_1.ReferenceObject;
+
 export abstract class AbstractOpenAPIV3ParserContext {
     public logger: Logger;
-    public document: OpenAPIV3.Document;
+    public document: OpenAPIV3.Document | OpenAPIV3_1.Document;
     public taskContext: TaskContext;
     public refOccurrences: Record<string, number>;
     public authHeaders: Set<string>;
@@ -27,7 +29,7 @@ export abstract class AbstractOpenAPIV3ParserContext {
         taskContext,
         authHeaders,
     }: {
-        document: OpenAPIV3.Document;
+        document: T;
         taskContext: TaskContext;
         authHeaders: Set<string>;
     }) {
@@ -38,11 +40,11 @@ export abstract class AbstractOpenAPIV3ParserContext {
         this.refOccurrences = getReferenceOccurrences(document);
     }
 
-    public getNumberOfOccurrencesForRef(schema: OpenAPIV3.ReferenceObject): number {
+    public getNumberOfOccurrencesForRef(schema: OpenAPIReferenceObject): number {
         return this.refOccurrences[schema.$ref] ?? 0;
     }
 
-    public resolveSchemaReference(schema: OpenAPIV3.ReferenceObject): OpenAPIV3.SchemaObject {
+    public resolveSchemaReference(schema: OpenAPIReferenceObject): OpenAPIV3.SchemaObject | OpenAPIV3_1.SchemaObject {
         if (
             this.document.components == null ||
             this.document.components.schemas == null ||
@@ -61,7 +63,7 @@ export abstract class AbstractOpenAPIV3ParserContext {
         return resolvedSchema;
     }
 
-    public resolveParameterReference(parameter: OpenAPIV3.ReferenceObject): OpenAPIV3.ParameterObject {
+    public resolveParameterReference(parameter: OpenAPIReferenceObject): OpenAPIV3.ParameterObject {
         if (
             this.document.components == null ||
             this.document.components.parameters == null ||
@@ -80,7 +82,7 @@ export abstract class AbstractOpenAPIV3ParserContext {
         return resolvedParameter;
     }
 
-    public resolveRequestBodyReference(requestBody: OpenAPIV3.ReferenceObject): OpenAPIV3.RequestBodyObject {
+    public resolveRequestBodyReference(requestBody: OpenAPIReferenceObject): OpenAPIV3_1.RequestBodyObject {
         if (
             this.document.components == null ||
             this.document.components.requestBodies == null ||
@@ -99,7 +101,7 @@ export abstract class AbstractOpenAPIV3ParserContext {
         return resolvedRequestBody;
     }
 
-    public resolveResponseReference(response: OpenAPIV3.ReferenceObject): OpenAPIV3.ResponseObject {
+    public resolveResponseReference(response: OpenAPIReferenceObject): OpenAPIV3_1.ResponseObject {
         if (
             this.document.components == null ||
             this.document.components.responses == null ||
@@ -126,17 +128,17 @@ export abstract class AbstractOpenAPIV3ParserContext {
 
     public abstract markSchemaForStatusCode(
         statusCode: number,
-        schema: OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject
+        schema: OpenAPIV3_1.ReferenceObject | OpenAPIV3_1.SchemaObject
     ): void;
 
     public abstract markReferencedByDiscriminatedUnion(
-        schema: OpenAPIV3.ReferenceObject,
+        schema: OpenAPIV3_1.ReferenceObject,
         discrminant: string,
         times: number
     ): void;
 
     public abstract getReferencesFromDiscriminatedUnion(
-        schema: OpenAPIV3.ReferenceObject
+        schema: OpenAPIV3_1.ReferenceObject
     ): DiscriminatedUnionReference | undefined;
 
     public abstract getErrors(): Record<StatusCode, HttpError>;

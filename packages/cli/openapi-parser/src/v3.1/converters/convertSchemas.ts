@@ -2,12 +2,12 @@ import { PrimitiveSchemaValue, ReferencedSchema, Schema } from "@fern-fern/opena
 import { isEqual } from "lodash-es";
 import { OpenAPIV3 } from "openapi-types";
 import { getGeneratedTypeName } from "../../utils/getSchemaName";
-import { isReferenceObject } from "../../utils/isReferenceObject";
-import { AbstractOpenAPIV3ParserContext } from "../AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3ParserContext } from "../AbstractOpenAPIV3_1ParserContext";
 import { OpenAPIExtension } from "../extensions/extensions";
 import { FernOpenAPIExtension } from "../extensions/fernExtensions";
 import { getExtension } from "../extensions/getExtension";
 import { getFernEnum } from "../extensions/getFernEnum";
+import { isReferenceObject } from "../utils/isReferenceObject";
 import { convertAdditionalProperties, wrapMap } from "./schema/convertAdditionalProperties";
 import { convertArray } from "./schema/convertArray";
 import { convertDiscriminatedOneOf, convertDiscriminatedOneOfWithVariants } from "./schema/convertDiscriminatedOneOf";

@@ -1,7 +1,7 @@
 import { CommonProperty, Schema } from "@fern-fern/openapi-ir-model/ir";
 import { OpenAPIV3 } from "openapi-types";
-import { isReferenceObject } from "../../../utils/isReferenceObject";
-import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3ParserContext";
+import { AbstractOpenAPIV3ParserContext } from "../../AbstractOpenAPIV3_1ParserContext";
+import { isReferenceObject } from "../../utils/isReferenceObject";
 import { convertReferenceObject, convertSchema, convertSchemaObject } from "../convertSchemas";
 
 export function convertDiscriminatedOneOf({

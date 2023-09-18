@@ -1,16 +1,16 @@
 import { Endpoint, EndpointSdkName, HttpMethod, Schema, Webhook } from "@fern-fern/openapi-ir-model/ir";
 import { camelCase } from "lodash-es";
 import { OpenAPIV3 } from "openapi-types";
+import { convertParameters } from "../../converters/convertParameters";
+import { OpenAPIExtension } from "../../extensions/extensions";
+import { FernOpenAPIExtension } from "../../extensions/fernExtensions";
+import { getExtension } from "../../extensions/getExtension";
+import { getFernAvailability } from "../../extensions/getFernAvailability";
 import { getGeneratedTypeName } from "../../utils/getSchemaName";
-import { isReferenceObject } from "../../utils/isReferenceObject";
-import { AbstractOpenAPIV3ParserContext } from "../AbstractOpenAPIV3ParserContext";
-import { DummyOpenAPIV3ParserContext } from "../DummyOpenAPIV3ParserContext";
-import { OpenAPIExtension } from "../extensions/extensions";
-import { FernOpenAPIExtension } from "../extensions/fernExtensions";
-import { getExtension } from "../extensions/getExtension";
-import { getFernAvailability } from "../extensions/getFernAvailability";
+import { AbstractOpenAPIV3_1ParserContext } from "../AbstractOpenAPIV3_1ParserContext";
+import { DummyOpenAPIV3_1ParserContext } from "../DummyOpenAPIV3_1ParserContext";
+import { isReferenceObject } from "../utils/isReferenceObject";
 import { convertServer } from "./convertServer";
-import { convertParameters } from "./endpoint/convertParameters";
 import { convertRequest } from "./endpoint/convertRequest";
 import { convertResponse } from "./endpoint/convertResponse";
 
@@ -31,7 +31,7 @@ export function convertPathItem(
     path: string,
     pathItemObject: OpenAPIV3.PathItemObject,
     document: OpenAPIV3.Document,
-    context: AbstractOpenAPIV3ParserContext
+    context: AbstractOpenAPIV3_1ParserContext
 ): ConvertedPathItems {
     const endpoints: Endpoint[] = [];
     const webhooks: Webhook[] = [];
@@ -145,7 +145,7 @@ function convertWebhook({
     path: string;
     httpMethod: HttpMethod.Get | HttpMethod.Post;
     operation: OpenAPIV3.OperationObject;
-    context: AbstractOpenAPIV3ParserContext;
+    context: AbstractOpenAPIV3_1ParserContext;
     document: OpenAPIV3.Document;
 }): Webhook | undefined {
     const sdkName = getSdkName({ operation });
@@ -205,10 +205,10 @@ function convertSyncAndAsyncEndpoints({
 }: {
     path: string;
     httpMethod: HttpMethod;
-    operation: OpenAPIV3.OperationObject;
+    operation: OpenAPIV3_1.OperationObject;
     pathItemParameters: (OpenAPIV3.ReferenceObject | OpenAPIV3.ParameterObject)[] | undefined;
     document: OpenAPIV3.Document;
-    context: AbstractOpenAPIV3ParserContext;
+    context: AbstractOpenAPIV3_1ParserContext;
 }): Endpoint[] {
     const shouldIgnore = getExtension<boolean>(operation, FernOpenAPIExtension.IGNORE);
     if (shouldIgnore != null && shouldIgnore) {
@@ -229,7 +229,7 @@ function convertSyncAndAsyncEndpoints({
             const resolvedParameter = isReferenceObject(parameter)
                 ? context.resolveParameterReference(parameter)
                 : parameter;
-            if (resolvedParameter.in === "header" && resolvedParameter.name === headerToIgnore) {
+            if (resolvedParameter. === "header" && resolvedParameter.name === headerToIgnore) {
                 return false;
             }
             return true;
@@ -360,7 +360,7 @@ function convertToEndpoint({
     operation: OpenAPIV3.OperationObject;
     parameters: (OpenAPIV3.ReferenceObject | OpenAPIV3.ParameterObject)[];
     document: OpenAPIV3.Document;
-    context: AbstractOpenAPIV3ParserContext;
+    context: AbstractOpenAPIV3_1ParserContext;
     responseStatusCode?: number;
     suffix?: string;
     path: string;
@@ -387,7 +387,7 @@ function convertToEndpoint({
             ? convertRequest({
                   requestBody: operation.requestBody,
                   document,
-                  context: new DummyOpenAPIV3ParserContext({
+                  context: new DummyOpenAPIV3_1ParserContext({
                       document: context.document,
                       taskContext: context.taskContext,
                   }),
