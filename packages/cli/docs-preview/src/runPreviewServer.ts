@@ -34,6 +34,11 @@ export async function runPreviewServer({
     app.post("/v2/registry/docs/load-with-url", async (_, res) => {
         res.send(response);
     });
+
+    app.use("/_next", express.static("/Users/dsinghvi/Downloads/out 2/_next"));
+    app.use("*", express.static("/Users/dsinghvi/Downloads/out 2/[host]/[[...slug]].html"));
+
+    ///Users/dsinghvi/Downloads/out
     app.listen(3000);
 
     context.logger.info("Running server on https://localhost:3000");
