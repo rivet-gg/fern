@@ -5,7 +5,10 @@
 package resources.endpoints.object;
 
 import core.BearerAuth;
+import java.lang.String;
 import java.security.Principal;
+import java.util.List;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -56,11 +59,20 @@ public interface ObjectService {
       @RequestBody NestedObjectWithOptionalField body);
 
   @PostMapping(
-      value = "/get-and-return-nested-with-required-field",
+      value = "/get-and-return-nested-with-required-field/{string}",
       produces = "application/json",
       consumes = "application/json"
   )
   NestedObjectWithRequiredField getAndReturnNestedWithRequiredField(
       @RequestHeader("Authorization") BearerAuth auth, Principal principal,
-      @RequestBody NestedObjectWithRequiredField body);
+      @PathVariable("string") String string, @RequestBody NestedObjectWithRequiredField body);
+
+  @PostMapping(
+      value = "/get-and-return-nested-with-required-field-list",
+      produces = "application/json",
+      consumes = "application/json"
+  )
+  NestedObjectWithRequiredField getAndReturnNestedWithRequiredFieldAsList(
+      @RequestHeader("Authorization") BearerAuth auth, Principal principal,
+      @RequestBody List<NestedObjectWithRequiredField> body);
 }

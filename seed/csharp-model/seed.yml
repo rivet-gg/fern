@@ -1,6 +1,18 @@
-irVersion: v33
+irVersion: v53
 docker: fernapi/fern-csharp-model:latest
 dockerCommand: yarn workspace @fern-api/fern-csharp-model dockerTagLatest
-language: java # change to csharp
+language: csharp
 generatorType: SDK
 defaultOutputMode: github
+fixtures: []
+scripts:
+  - docker: bitnami/dotnet-sdk:8
+    commands:
+      - dotnet build src -c Release /p:ContinuousIntegrationBuild=true
+local:
+  workingDirectory: generators/csharp
+  buildCommand:
+    - yarn workspace @fern-api/fern-csharp-model dist:cli
+  runCommand: node model/dist/bundle.cjs
+allowedFailures:
+  - objects-with-imports

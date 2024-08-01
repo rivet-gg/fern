@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..commons.binary_tree_node_value import BinaryTreeNodeValue
 from ..commons.binary_tree_value import BinaryTreeValue
 from ..commons.doubly_linked_list_node_value import DoublyLinkedListNodeValue
@@ -26,29 +27,31 @@ from .test_case_result import TestCaseResult
 from .test_case_result_with_stdout import TestCaseResultWithStdout
 from .traced_test_case import TracedTestCase
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+
+class TestSubmissionStatus_Stopped(UniversalBaseModel):
+    type: typing.Literal["stopped"] = "stopped"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class TestSubmissionStatus_Stopped(pydantic.BaseModel):
-    type: typing_extensions.Literal["stopped"]
-
-
-class TestSubmissionStatus_Errored(pydantic.BaseModel):
-    type: typing_extensions.Literal["errored"]
+class TestSubmissionStatus_Errored(UniversalBaseModel):
     value: ErrorInfo
+    type: typing.Literal["errored"] = "errored"
 
 
-class TestSubmissionStatus_Running(pydantic.BaseModel):
-    type: typing_extensions.Literal["running"]
+class TestSubmissionStatus_Running(UniversalBaseModel):
     value: RunningSubmissionState
+    type: typing.Literal["running"] = "running"
 
 
-class TestSubmissionStatus_TestCaseIdToState(pydantic.BaseModel):
-    type: typing_extensions.Literal["testCaseIdToState"]
+class TestSubmissionStatus_TestCaseIdToState(UniversalBaseModel):
     value: typing.Dict[str, SubmissionStatusForTestCase]
+    type: typing.Literal["testCaseIdToState"] = "testCaseIdToState"
 
 
 TestSubmissionStatus = typing.Union[

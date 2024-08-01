@@ -1,14 +1,8 @@
-import { assertNever, isNonNullish } from "@fern-api/core-utils";
+import { isNonNullish } from "@fern-api/core-utils";
+import { EndpointExample, FullExample } from "@fern-api/openapi-ir-sdk";
 import { RawSchemas } from "@fern-api/yaml-schema";
-import {
-    FullExample,
-    FullOneOfExample,
-    KeyValuePair,
-    LiteralExample,
-    PrimitiveExample
-} from "@fern-fern/openapi-ir-model/example";
-import { EndpointExample } from "@fern-fern/openapi-ir-model/finalIr";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { convertFullExample } from "./utils/convertFullExample";
 
 export function buildEndpointExample({
     endpointExample,
@@ -18,6 +12,9 @@ export function buildEndpointExample({
     context: OpenApiIrConverterContext;
 }): RawSchemas.ExampleEndpointCallSchema {
     const example: RawSchemas.ExampleEndpointCallSchema = {};
+    if (endpointExample.type !== "full") {
+        return endpointExample.value as RawSchemas.ExampleEndpointCallSchema;
+    }
 
     if (endpointExample.name != null) {
         example.name = endpointExample.name;
@@ -51,7 +48,7 @@ export function buildEndpointExample({
         example.response = { body: convertFullExample(endpointExample.response) };
     }
 
-    if (endpointExample.codeSamples.length > 0) {
+    if (endpointExample.codeSamples != null && endpointExample.codeSamples.length > 0) {
         example["code-samples"] = endpointExample.codeSamples
             .map((codeSample) => {
                 if (codeSample.type === "language") {
@@ -125,95 +122,4 @@ function convertHeaderExamples({
         }
     });
     return result;
-}
-
-function convertFullExample(fullExample: FullExample): RawSchemas.ExampleTypeReferenceSchema {
-    switch (fullExample.type) {
-        case "primitive":
-            return convertPrimitive(fullExample.primitive);
-        case "object":
-            return convertObject(fullExample.properties);
-        case "array":
-            return convertArrayExample(fullExample.array);
-        case "map":
-            return convertMapExample(fullExample.map);
-        case "oneOf":
-            return convertOneOfExample(fullExample.oneOf);
-        case "enum":
-            return fullExample.enum;
-        case "literal":
-            return convertLiteralExample(fullExample.literal);
-        case "unknown":
-            return convertFullExample(fullExample.unknown);
-        default:
-            assertNever(fullExample);
-    }
-}
-
-function convertPrimitive(primitiveExample: PrimitiveExample): RawSchemas.ExampleTypeReferenceSchema {
-    switch (primitiveExample.type) {
-        case "int":
-            return primitiveExample.int;
-        case "int64":
-            return primitiveExample.int64;
-        case "float":
-            return primitiveExample.float;
-        case "double":
-            return primitiveExample.double;
-        case "string": {
-            if (primitiveExample.string.startsWith("$")) {
-                return `${primitiveExample.string.slice(1)}`;
-            }
-            return primitiveExample.string;
-        }
-        case "datetime":
-            return primitiveExample.datetime;
-        case "date":
-            return primitiveExample.date;
-        case "base64":
-            return primitiveExample.base64;
-        case "boolean":
-            return primitiveExample.boolean;
-        default:
-            assertNever(primitiveExample);
-    }
-}
-
-function convertObject(object: Record<PropertyKey, FullExample>): RawSchemas.ExampleTypeReferenceSchema {
-    return Object.fromEntries(
-        Object.entries(object).map(([propertyKey, fullExample]) => {
-            return [propertyKey, convertFullExample(fullExample)];
-        })
-    );
-}
-
-function convertArrayExample(fullExamples: FullExample[]): RawSchemas.ExampleTypeReferenceSchema {
-    return fullExamples.map((fullExample) => {
-        return convertFullExample(fullExample);
-    });
-}
-
-function convertMapExample(pairs: KeyValuePair[]): RawSchemas.ExampleTypeReferenceSchema {
-    return Object.fromEntries(
-        pairs.map((pair) => {
-            return [convertPrimitive(pair.key), convertFullExample(pair.value)];
-        })
-    );
-}
-
-function convertOneOfExample(oneOf: FullOneOfExample): RawSchemas.ExampleTypeReferenceSchema {
-    if (oneOf.type === "discriminated") {
-        return convertObject(oneOf.discriminated);
-    }
-    return convertFullExample(oneOf.undisciminated);
-}
-function convertLiteralExample(literal: LiteralExample): RawSchemas.ExampleTypeReferenceSchema {
-    switch (literal.type) {
-        case "string":
-            return literal.string;
-        case "boolean":
-            return literal.boolean;
-        default:
-            assertNever(literal);
-    }
 }

@@ -1,6 +1,6 @@
+import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/configuration";
 import { RelativeFilePath } from "@fern-api/fs-utils";
-import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/project-configuration";
-import { Endpoint, HttpMethod } from "@fern-fern/openapi-ir-model/finalIr";
+import { Endpoint, HttpMethod } from "@fern-api/openapi-ir-sdk";
 import { camelCase, compact, isEqual } from "lodash-es";
 
 export interface EndpointLocation {
@@ -10,18 +10,22 @@ export interface EndpointLocation {
 }
 
 export function getEndpointLocation(endpoint: Endpoint): EndpointLocation {
+    const tag = endpoint.tags[0];
     if (endpoint.sdkName != null) {
-        const filename =
+        const filenameWithoutExtension =
             endpoint.sdkName.groupName.length === 0
-                ? "__package__.yml"
-                : `${endpoint.sdkName.groupName.map((part) => camelCase(part)).join("/")}.yml`;
+                ? "__package__"
+                : `${endpoint.sdkName.groupName.map((part) => camelCase(part)).join("/")}`;
+        const filename = `${filenameWithoutExtension}.yml`;
+        // only if the tag lines up with `x-fern-sdk-group-name` do we use it
+        const isTagApplicable = filenameWithoutExtension.toLowerCase() === tag?.toLowerCase().replaceAll(" ", "");
         return {
             file: RelativeFilePath.of(filename),
-            endpointId: endpoint.sdkName.methodName
+            endpointId: endpoint.sdkName.methodName,
+            // only if the tag lines up with `x-fern-sdk-group-name` do we use it
+            tag: isTagApplicable ? tag : undefined
         };
     }
-
-    const tag = endpoint.tags[0];
     const operationId = endpoint.operationId;
 
     if (operationId == null) {
@@ -32,6 +36,14 @@ export function getEndpointLocation(endpoint: Endpoint): EndpointLocation {
                     endpoint.summary != null
                         ? camelCase(endpoint.summary)
                         : camelCase(`${endpoint.method}_${endpoint.path.split("/").join("_")}`)
+            };
+        }
+
+        // If no operation id and tag, use summary to generate id
+        if (endpoint.summary != null) {
+            return {
+                file: RelativeFilePath.of(FERN_PACKAGE_MARKER_FILENAME),
+                endpointId: camelCase(endpoint.summary)
             };
         }
 

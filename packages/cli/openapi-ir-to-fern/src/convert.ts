@@ -1,9 +1,7 @@
 import { RelativeFilePath } from "@fern-api/fs-utils";
-import { TaskContext } from "@fern-api/task-context";
 import { DefinitionFileSchema, PackageMarkerFileSchema, RootApiFileSchema } from "@fern-api/yaml-schema";
-import { OpenAPIIntermediateRepresentation } from "@fern-fern/openapi-ir-model/finalIr";
 import { buildFernDefinition } from "./buildFernDefinition";
-import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { OpenApiIrConverterContext, OpenApiIrConverterContextOpts } from "./OpenApiIrConverterContext";
 
 export interface OpenApiConvertedFernDefinition {
     rootApiFile: RootApiFileSchema;
@@ -11,13 +9,7 @@ export interface OpenApiConvertedFernDefinition {
     definitionFiles: Record<RelativeFilePath, DefinitionFileSchema>;
 }
 
-export function convert({
-    openApiIr,
-    taskContext
-}: {
-    taskContext: TaskContext;
-    openApiIr: OpenAPIIntermediateRepresentation;
-}): OpenApiConvertedFernDefinition {
-    const context = new OpenApiIrConverterContext({ taskContext, ir: openApiIr });
+export function convert(opts: OpenApiIrConverterContextOpts): OpenApiConvertedFernDefinition {
+    const context = new OpenApiIrConverterContext(opts);
     return buildFernDefinition(context);
 }

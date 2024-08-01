@@ -11,6 +11,7 @@ import (
 
 	"github.com/fern-api/fern-go/internal/ast"
 	"github.com/fern-api/fern-go/internal/coordinator"
+	"github.com/fern-api/fern-go/internal/fern/ir"
 	fernir "github.com/fern-api/fern-go/internal/fern/ir"
 	generatorexec "github.com/fern-api/generator-exec-go"
 )
@@ -131,6 +132,8 @@ func (g *Generator) generateModelTypes(ir *fernir.IntermediateRepresentation, mo
 			fileInfo.filename,
 			fileInfo.packageName,
 			g.config.ImportPath,
+			g.config.Whitelabel,
+			g.config.UnionVersion,
 			ir.Types,
 			ir.Errors,
 			g.coordinator,
@@ -229,7 +232,16 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 	// Write all of the package-level documentation, if any (i.e. in a doc.go file).
 	if ir.RootPackage != nil && ir.RootPackage.Docs != nil && len(*ir.RootPackage.Docs) > 0 {
 		fileInfo := fileInfoForPackage(rootPackageName, ir.RootPackage.FernFilepath)
-		writer := newFileWriter(fileInfo.filename, fileInfo.packageName, "", nil, nil, g.coordinator)
+		writer := newFileWriter(
+			fileInfo.filename,
+			fileInfo.packageName,
+			"",
+			g.config.Whitelabel,
+			g.config.UnionVersion,
+			nil,
+			nil,
+			g.coordinator,
+		)
 		writer.WriteDocs(ir.RootPackage.Docs)
 		files = append(files, writer.DocsFile())
 	}
@@ -237,8 +249,17 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 		if subpackage.Docs == nil || len(*subpackage.Docs) == 0 {
 			continue
 		}
-		fileInfo := fileInfoForPackage(rootPackageName, subpackage.FernFilepath)
-		writer := newFileWriter(fileInfo.filename, fileInfo.packageName, "", nil, nil, g.coordinator)
+		fileInfo := fileInfoForPackageDocs(subpackage.FernFilepath)
+		writer := newFileWriter(
+			fileInfo.filename,
+			fileInfo.packageName,
+			"",
+			g.config.Whitelabel,
+			g.config.UnionVersion,
+			nil,
+			nil,
+			g.coordinator,
+		)
 		writer.WriteDocs(subpackage.Docs)
 		files = append(files, writer.DocsFile())
 	}
@@ -251,8 +272,14 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 	files = append(files, modelFiles...)
 	files = append(files, newStringerFile(g.coordinator))
 	files = append(files, newTimeFile(g.coordinator))
+	files = append(files, newExtraPropertiesFile(g.coordinator))
+	files = append(files, newExtraPropertiesTestFile(g.coordinator))
 	// Then handle mode-specific generation tasks.
-	var generatedClient *GeneratedClient
+	var rootClientInstantiation *ast.AssignStmt
+	generatedRootClient := &GeneratedClient{
+		Instantiation: rootClientInstantiation,
+	}
+	var generatedPagination bool
 	switch mode {
 	case ModeFiber:
 		break
@@ -261,12 +288,15 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 			generatedAuth        *GeneratedAuth
 			generatedEnvironment *GeneratedEnvironment
 		)
+		generatedPagination = needsPaginationHelpers(ir)
 		// Generate the core API files.
 		fileInfo := fileInfoForRequestOptionsDefinition()
 		writer := newFileWriter(
 			fileInfo.filename,
 			fileInfo.packageName,
 			g.config.ImportPath,
+			g.config.Whitelabel,
+			g.config.UnionVersion,
 			ir.Types,
 			ir.Errors,
 			g.coordinator,
@@ -293,6 +323,8 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 				fileInfo.filename,
 				fileInfo.packageName,
 				g.config.ImportPath,
+				g.config.Whitelabel,
+				g.config.UnionVersion,
 				ir.Types,
 				ir.Errors,
 				g.coordinator,
@@ -313,6 +345,8 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 			fileInfo.filename,
 			fileInfo.packageName,
 			g.config.ImportPath,
+			g.config.Whitelabel,
+			g.config.UnionVersion,
 			ir.Types,
 			ir.Errors,
 			g.coordinator,
@@ -326,12 +360,19 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 			return nil, err
 		}
 		files = append(files, file)
+		rootClientInstantiation = generatedClientInstantiation(
+			g.config.ImportPath,
+			generatedAuth,
+			generatedEnvironment,
+		)
 		if len(ir.IdempotencyHeaders) > 0 {
 			fileInfo = fileInfoForIdempotentRequestOptionsDefinition()
 			writer = newFileWriter(
 				fileInfo.filename,
 				fileInfo.packageName,
 				g.config.ImportPath,
+				g.config.Whitelabel,
+				g.config.UnionVersion,
 				ir.Types,
 				ir.Errors,
 				g.coordinator,
@@ -349,6 +390,8 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 				fileInfo.filename,
 				fileInfo.packageName,
 				g.config.ImportPath,
+				g.config.Whitelabel,
+				g.config.UnionVersion,
 				ir.Types,
 				ir.Errors,
 				g.coordinator,
@@ -369,6 +412,8 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 				fileInfo.filename,
 				fileInfo.packageName,
 				g.config.ImportPath,
+				g.config.Whitelabel,
+				g.config.UnionVersion,
 				ir.Types,
 				ir.Errors,
 				g.coordinator,
@@ -388,6 +433,8 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 			fileInfo.filename,
 			fileInfo.packageName,
 			g.config.ImportPath,
+			g.config.Whitelabel,
+			g.config.UnionVersion,
 			ir.Types,
 			ir.Errors,
 			g.coordinator,
@@ -413,6 +460,10 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 		if ir.SdkConfig.HasStreamingEndpoints {
 			files = append(files, newStreamFile(g.coordinator))
 		}
+		if generatedPagination {
+			files = append(files, newPagerFile(g.coordinator))
+			files = append(files, newPageFile(g.coordinator))
+		}
 		clientTestFile, err := newClientTestFile(g.config.ImportPath, g.coordinator)
 		if err != nil {
 			return nil, err
@@ -424,6 +475,8 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 				fileInfo.filename,
 				fileInfo.packageName,
 				g.config.ImportPath,
+				g.config.Whitelabel,
+				g.config.UnionVersion,
 				ir.Types,
 				ir.Errors,
 				g.coordinator,
@@ -452,30 +505,35 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 				rootSubpackages = append(rootSubpackages, subpackage)
 			}
 			if ir.RootPackage.Service != nil {
-				file, generatedClient, err = g.generateService(
+				file, generatedClient, err := g.generateService(
 					ir,
 					ir.Services[*ir.RootPackage.Service],
 					rootSubpackages,
-					generatedAuth,
-					generatedEnvironment,
+					rootClientInstantiation,
 					ir.RootPackage.FernFilepath,
 				)
 				if err != nil {
 					return nil, err
 				}
 				files = append(files, file)
+
+				// Merge this client's endpoints with the root generated client.
+				generatedRootClient.Endpoints = append(generatedRootClient.Endpoints, generatedClient.Endpoints...)
+
 			} else {
-				file, generatedClient, err = g.generateRootServiceWithoutEndpoints(
+				file, generatedClient, err := g.generateRootServiceWithoutEndpoints(
 					ir,
 					ir.RootPackage.FernFilepath,
 					rootSubpackages,
-					generatedAuth,
-					generatedEnvironment,
+					rootClientInstantiation,
 				)
 				if err != nil {
 					return nil, err
 				}
 				files = append(files, file)
+
+				// Merge this client's endpoints with the root generated client.
+				generatedRootClient.Endpoints = append(generatedRootClient.Endpoints, generatedClient.Endpoints...)
 			}
 		}
 		// Then generate the client for all of the subpackages.
@@ -503,8 +561,7 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 					ir,
 					irSubpackage,
 					subpackages,
-					generatedAuth,
-					generatedEnvironment,
+					rootClientInstantiation,
 					subpackageToGenerate.OriginalFernFilepath,
 				)
 				if err != nil {
@@ -514,18 +571,26 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 				continue
 			}
 			// This service has endpoints, so we proceed with the normal flow.
-			file, _, err := g.generateService(
+			file, generatedClient, err := g.generateService(
 				ir,
 				ir.Services[*irSubpackage.Service],
 				subpackages,
-				generatedAuth,
-				generatedEnvironment,
+				rootClientInstantiation,
 				subpackageToGenerate.OriginalFernFilepath,
 			)
 			if err != nil {
 				return nil, err
 			}
 			files = append(files, file)
+
+			// Merge this client's endpoints with the root generated client.
+			generatedRootClient.Endpoints = append(generatedRootClient.Endpoints, generatedClient.Endpoints...)
+		}
+	}
+	// Write the snippets, if any.
+	if g.config.SnippetFilepath != "" {
+		if err := maybeWriteSnippets(g.coordinator, generatedRootClient, g.config.SnippetFilepath); err != nil {
+			return nil, err
 		}
 	}
 	// Finally, generate the go.mod file, if needed.
@@ -533,21 +598,193 @@ func (g *Generator) generate(ir *fernir.IntermediateRepresentation, mode Mode) (
 	// The go.sum file will be generated after the
 	// go.mod file is written to disk.
 	if g.config.ModuleConfig != nil {
-		requiresGenerics := g.config.EnableExplicitNull || ir.SdkConfig.HasStreamingEndpoints
+		requiresGenerics := g.config.EnableExplicitNull || ir.SdkConfig.HasStreamingEndpoints || generatedPagination
 		file, generatedGoVersion, err := NewModFile(g.coordinator, g.config.ModuleConfig, requiresGenerics)
 		if err != nil {
 			return nil, err
 		}
 		files = append(files, file)
 
-		if g.config.IncludeReadme {
-			if err := g.generateReadme(generatedClient, generatedGoVersion); err != nil {
+		if g.config.IncludeReadme && generatedRootClient.Instantiation != nil {
+			if err := g.generateReadme(generatedRootClient, generatedGoVersion); err != nil {
 				return nil, err
 			}
 			files = append(files, file)
 		}
 	}
 	return files, nil
+}
+
+func (g *Generator) generateService(
+	ir *fernir.IntermediateRepresentation,
+	irService *fernir.HttpService,
+	irSubpackages []*fernir.Subpackage,
+	rootClientInstantiation *ast.AssignStmt,
+	originalFernFilepath *fernir.FernFilepath,
+) (*File, *GeneratedClient, error) {
+	fileInfo := fileInfoForService(irService.Name.FernFilepath)
+	writer := newFileWriter(
+		fileInfo.filename,
+		fileInfo.packageName,
+		g.config.ImportPath,
+		g.config.Whitelabel,
+		g.config.UnionVersion,
+		ir.Types,
+		ir.Errors,
+		g.coordinator,
+	)
+	generatedClient, err := writer.WriteClient(
+		ir.Auth,
+		irService.Endpoints,
+		ir.Headers,
+		ir.IdempotencyHeaders,
+		irSubpackages,
+		ir.Environments,
+		ir.ErrorDiscriminationStrategy,
+		originalFernFilepath,
+		rootClientInstantiation,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	file, err := writer.File()
+	if err != nil {
+		return nil, nil, err
+	}
+	return file, generatedClient, nil
+}
+
+// generateServiceWithoutEndpoints is behaviorally similar to g.generateService, but
+// it's suited to write purely intermediary services (i.e. those that don't include
+// any endpoints).
+func (g *Generator) generateServiceWithoutEndpoints(
+	ir *fernir.IntermediateRepresentation,
+	irSubpackage *fernir.Subpackage,
+	irSubpackages []*fernir.Subpackage,
+	rootClientInstantiation *ast.AssignStmt,
+	originalFernFilepath *fernir.FernFilepath,
+) (*File, error) {
+	fileInfo := fileInfoForService(irSubpackage.FernFilepath)
+	writer := newFileWriter(
+		fileInfo.filename,
+		fileInfo.packageName,
+		g.config.ImportPath,
+		g.config.Whitelabel,
+		g.config.UnionVersion,
+		ir.Types,
+		ir.Errors,
+		g.coordinator,
+	)
+	if _, err := writer.WriteClient(
+		ir.Auth,
+		nil,
+		ir.Headers,
+		ir.IdempotencyHeaders,
+		irSubpackages,
+		nil,
+		ir.ErrorDiscriminationStrategy,
+		originalFernFilepath,
+		rootClientInstantiation,
+	); err != nil {
+		return nil, err
+	}
+	return writer.File()
+}
+
+// generateRootServiceWithoutEndpoints is behaviorally similar to g.generateService, but
+// it's suited to write purely intermediary services (i.e. those that don't include
+// any endpoints) for the root package.
+func (g *Generator) generateRootServiceWithoutEndpoints(
+	ir *fernir.IntermediateRepresentation,
+	fernFilepath *fernir.FernFilepath,
+	irSubpackages []*fernir.Subpackage,
+	rootClientInstantiation *ast.AssignStmt,
+) (*File, *GeneratedClient, error) {
+	fileInfo := fileInfoForService(fernFilepath)
+	writer := newFileWriter(
+		fileInfo.filename,
+		fileInfo.packageName,
+		g.config.ImportPath,
+		g.config.Whitelabel,
+		g.config.UnionVersion,
+		ir.Types,
+		ir.Errors,
+		g.coordinator,
+	)
+	generatedClient, err := writer.WriteClient(
+		ir.Auth,
+		nil,
+		ir.Headers,
+		ir.IdempotencyHeaders,
+		irSubpackages,
+		nil,
+		ir.ErrorDiscriminationStrategy,
+		fernFilepath,
+		rootClientInstantiation,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	file, err := writer.File()
+	if err != nil {
+		return nil, nil, err
+	}
+	return file, generatedClient, nil
+}
+
+func maybeWriteSnippets(
+	coordinator *coordinator.Client,
+	generatedClient *GeneratedClient,
+	snippetFilepath string,
+) error {
+	if len(generatedClient.Endpoints) == 0 {
+		return nil
+	}
+	var endpoints []*generatorexec.Endpoint
+	for _, generatedEndpoint := range generatedClient.Endpoints {
+		client, err := ast.NewSourceCodeBuilder(generatedEndpoint.Snippet).BuildSnippet()
+		if err != nil {
+			// Log the warning and continue. We don't want to fail generation just
+			// because there's a bug in the snippet generator.
+			_ = coordinator.Log(
+				generatorexec.LogLevelWarn,
+				fmt.Sprintf(
+					"Failed to generate snippet for endpoint %s %q: %v",
+					generatedEndpoint.Identifier.Method,
+					generatedEndpoint.Identifier.Path,
+					err,
+				),
+			)
+			continue
+		}
+		endpoints = append(
+			endpoints,
+			&generatorexec.Endpoint{
+				Id: generatedEndpoint.Identifier,
+				Snippet: generatorexec.NewEndpointSnippetFromGo(
+					&generatorexec.GoEndpointSnippet{
+						Client: client,
+					},
+				),
+			},
+		)
+	}
+	// Sort the endpoints for deterministic results.
+	sort.Slice(
+		endpoints,
+		func(i, j int) bool {
+			return generatorexecEndpointSnippetToString(endpoints[i]) < generatorexecEndpointSnippetToString(endpoints[j])
+		},
+	)
+	snippets := &generatorexec.Snippets{
+		Types:     make(map[ir.TypeId]string),
+		Endpoints: endpoints,
+	}
+	bytes, err := json.MarshalIndent(snippets, "", "    ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(snippetFilepath, bytes, 0644)
 }
 
 // generateReadme generates a README.md file for a generated Go module, called
@@ -593,117 +830,6 @@ func (g *Generator) generateReadme(
 			Usage:        usage,
 		},
 	)
-}
-
-func (g *Generator) generateService(
-	ir *fernir.IntermediateRepresentation,
-	irService *fernir.HttpService,
-	irSubpackages []*fernir.Subpackage,
-	generatedAuth *GeneratedAuth,
-	generatedEnvironment *GeneratedEnvironment,
-	originalFernFilepath *fernir.FernFilepath,
-) (*File, *GeneratedClient, error) {
-	fileInfo := fileInfoForService(irService.Name.FernFilepath)
-	writer := newFileWriter(
-		fileInfo.filename,
-		fileInfo.packageName,
-		g.config.ImportPath,
-		ir.Types,
-		ir.Errors,
-		g.coordinator,
-	)
-	generatedClient, err := writer.WriteClient(
-		irService.Endpoints,
-		ir.IdempotencyHeaders,
-		irSubpackages,
-		ir.Environments,
-		ir.ErrorDiscriminationStrategy,
-		originalFernFilepath,
-		generatedAuth,
-		generatedEnvironment,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	file, err := writer.File()
-	if err != nil {
-		return nil, nil, err
-	}
-	return file, generatedClient, nil
-}
-
-// generateServiceWithoutEndpoints is behaviorally similar to g.generateService, but
-// it's suited to write purely intermediary services (i.e. those that don't include
-// any endpoints).
-func (g *Generator) generateServiceWithoutEndpoints(
-	ir *fernir.IntermediateRepresentation,
-	irSubpackage *fernir.Subpackage,
-	irSubpackages []*fernir.Subpackage,
-	generatedAuth *GeneratedAuth,
-	generatedEnvironment *GeneratedEnvironment,
-	originalFernFilepath *fernir.FernFilepath,
-) (*File, error) {
-	fileInfo := fileInfoForService(irSubpackage.FernFilepath)
-	writer := newFileWriter(
-		fileInfo.filename,
-		fileInfo.packageName,
-		g.config.ImportPath,
-		ir.Types,
-		ir.Errors,
-		g.coordinator,
-	)
-	if _, err := writer.WriteClient(
-		nil,
-		ir.IdempotencyHeaders,
-		irSubpackages,
-		nil,
-		ir.ErrorDiscriminationStrategy,
-		originalFernFilepath,
-		generatedAuth,
-		generatedEnvironment,
-	); err != nil {
-		return nil, err
-	}
-	return writer.File()
-}
-
-// generateRootServiceWithoutEndpoints is behaviorally similar to g.generateService, but
-// it's suited to write purely intermediary services (i.e. those that don't include
-// any endpoints) for the root package.
-func (g *Generator) generateRootServiceWithoutEndpoints(
-	ir *fernir.IntermediateRepresentation,
-	fernFilepath *fernir.FernFilepath,
-	irSubpackages []*fernir.Subpackage,
-	generatedAuth *GeneratedAuth,
-	generatedEnvironment *GeneratedEnvironment,
-) (*File, *GeneratedClient, error) {
-	fileInfo := fileInfoForService(fernFilepath)
-	writer := newFileWriter(
-		fileInfo.filename,
-		fileInfo.packageName,
-		g.config.ImportPath,
-		ir.Types,
-		ir.Errors,
-		g.coordinator,
-	)
-	generatedClient, err := writer.WriteClient(
-		nil,
-		ir.IdempotencyHeaders,
-		irSubpackages,
-		nil,
-		ir.ErrorDiscriminationStrategy,
-		fernFilepath,
-		generatedAuth,
-		generatedEnvironment,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	file, err := writer.File()
-	if err != nil {
-		return nil, nil, err
-	}
-	return file, generatedClient, nil
 }
 
 // readIR reads the *InermediateRepresentation from the given filename.
@@ -783,6 +909,8 @@ func newClientTestFile(
 		"client/client_test.go",
 		"client",
 		baseImportPath,
+		false,
+		UnionVersionUnspecified,
 		nil,
 		nil,
 		coordinator,
@@ -820,6 +948,22 @@ func newOptionalTestFile(coordinator *coordinator.Client) *File {
 		coordinator,
 		"core/optional_test.go",
 		[]byte(optionalTestFile),
+	)
+}
+
+func newPagerFile(coordinator *coordinator.Client) *File {
+	return NewFile(
+		coordinator,
+		"core/pager.go",
+		[]byte(pagerFile),
+	)
+}
+
+func newPageFile(coordinator *coordinator.Client) *File {
+	return NewFile(
+		coordinator,
+		"core/page.go",
+		[]byte(pageFile),
 	)
 }
 
@@ -868,6 +1012,22 @@ func newTimeFile(coordinator *coordinator.Client) *File {
 		coordinator,
 		"core/time.go",
 		[]byte(timeFile),
+	)
+}
+
+func newExtraPropertiesFile(coordinator *coordinator.Client) *File {
+	return NewFile(
+		coordinator,
+		"core/extra_properties.go",
+		[]byte(extraPropertiesFile),
+	)
+}
+
+func newExtraPropertiesTestFile(coordinator *coordinator.Client) *File {
+	return NewFile(
+		coordinator,
+		"core/extra_properties_test.go",
+		[]byte(extraPropertiesTestFile),
 	)
 }
 
@@ -972,6 +1132,14 @@ func fileInfoForType(rootPackageName string, fernFilepath *fernir.FernFilepath) 
 	}
 }
 
+func fileInfoForPackageDocs(fernFilepath *fernir.FernFilepath) *fileInfo {
+	packagePath := packagePathForDocs(fernFilepath)
+	return &fileInfo{
+		filename:    filepath.Join(append(packagePath, "doc.go")...),
+		packageName: packagePath[len(packagePath)-1],
+	}
+}
+
 func fileInfoForService(fernFilepath *fernir.FernFilepath) *fileInfo {
 	packagePath := packagePathForClient(fernFilepath)
 	return &fileInfo{
@@ -1050,6 +1218,18 @@ func fileUploadHasBodyProperties(fileUpload *fernir.FileUploadRequest) bool {
 		}
 	}
 	return false
+}
+
+func packagePathForDocs(fernFilepath *fernir.FernFilepath) []string {
+	var packages []string
+	for _, packageName := range fernFilepath.PackagePath {
+		packages = append(packages, strings.ToLower(packageName.CamelCase.SafeName))
+	}
+	if fernFilepath.File == nil {
+		return packages
+	}
+	directory := strings.ToLower(fernFilepath.File.CamelCase.SafeName)
+	return append(packages, directory)
 }
 
 func packagePathForClient(fernFilepath *fernir.FernFilepath) []string {
@@ -1247,7 +1427,7 @@ func stringSetToSortedSlice(set map[string]struct{}) []string {
 }
 
 // zeroValueForTypeReference returns the zero value for the given type reference.
-func zeroValueForTypeReference(typeReference *fernir.TypeReference) string {
+func zeroValueForTypeReference(typeReference *fernir.TypeReference, types map[ir.TypeId]*ir.TypeDeclaration) string {
 	if typeReference.Container != nil && typeReference.Container.Literal != nil {
 		switch typeReference.Container.Literal.Type {
 		case "string":
@@ -1258,6 +1438,15 @@ func zeroValueForTypeReference(typeReference *fernir.TypeReference) string {
 	}
 	if typeReference.Primitive != "" {
 		return zeroValueForPrimitive(typeReference.Primitive)
+	}
+	if typeReference.Named != nil {
+		typeDeclaration := types[typeReference.Named.TypeId]
+		if typeDeclaration.Shape.Alias != nil {
+			return zeroValueForTypeReference(typeDeclaration.Shape.Alias.AliasOf, types)
+		}
+		if typeDeclaration.Shape.Enum != nil {
+			return `""`
+		}
 	}
 	return "nil"
 }
@@ -1285,6 +1474,39 @@ func getRootPackageName(ir *fernir.IntermediateRepresentation, packageNameOverri
 		return packageNameOverride
 	}
 	return strings.ToLower(ir.ApiName.CamelCase.SafeName)
+}
+
+// generatorexecEndpointSnippetToString returns the string representation of the given
+// endpoint snippet.
+//
+// It isn't enough to sort based on the endpoint path and method along (there can be duplicates),
+// so we include the snippet's content to disambiguate.
+func generatorexecEndpointSnippetToString(endpointSnippet *generatorexec.Endpoint) string {
+	if endpointSnippet == nil || endpointSnippet.Id == nil {
+		return ""
+	}
+	var goSnippet string
+	if endpointSnippet.Snippet != nil && endpointSnippet.Snippet.Go != nil {
+		goSnippet = endpointSnippet.Snippet.Go.Client
+	}
+	return fmt.Sprintf(
+		"%s.%s.%s",
+		endpointSnippet.Id.Path,
+		endpointSnippet.Id.Method,
+		goSnippet,
+	)
+}
+
+// needsPaginationHelpers returns true if at least endpoint specifies pagination.
+func needsPaginationHelpers(ir *fernir.IntermediateRepresentation) bool {
+	for _, irService := range ir.Services {
+		for _, irEndpoint := range irService.Endpoints {
+			if irEndpoint.Pagination != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // pointerFunctionNames enumerates all of the pointer function names.

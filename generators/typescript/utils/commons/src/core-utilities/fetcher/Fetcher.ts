@@ -42,6 +42,15 @@ export interface Fetcher {
         ) => ts.Expression;
     };
 
+    readonly RUNTIME: {
+        type: {
+            _getReferenceTo: () => ts.Expression;
+        };
+        version: {
+            _getReferenceTo: () => ts.Expression;
+        };
+    };
+
     readonly APIResponse: {
         _getReferenceToType: (successType: ts.TypeNode, failureType: ts.TypeNode) => ts.TypeNode;
 
@@ -78,12 +87,15 @@ export declare namespace Fetcher {
         url: ts.Expression;
         method: ts.Expression;
         headers: ts.ObjectLiteralElementLike[];
-        contentType: string | ts.Expression;
+        contentType?: string | ts.Expression;
         queryParameters: ts.Expression | undefined;
         body: ts.Expression | undefined;
+        abortSignal: ts.Expression | undefined;
         withCredentials: boolean;
         timeoutInSeconds: ts.Expression;
         maxRetries?: ts.Expression;
-        responseType?: "json" | "blob" | "streaming";
+        requestType?: "json" | "file" | "bytes" | "other";
+        responseType?: "json" | "blob" | "sse" | "streaming" | "text";
+        duplex?: ts.Expression;
     }
 }

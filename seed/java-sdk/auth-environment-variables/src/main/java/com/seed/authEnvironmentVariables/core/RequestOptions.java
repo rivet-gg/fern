@@ -5,18 +5,40 @@ package com.seed.authEnvironmentVariables.core;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 public final class RequestOptions {
     private final String apiKey;
 
-    private RequestOptions(String apiKey) {
+    private final String xAnotherHeader;
+
+    private final Optional<Integer> timeout;
+
+    private final TimeUnit timeoutTimeUnit;
+
+    private RequestOptions(String apiKey, String xAnotherHeader, Optional<Integer> timeout, TimeUnit timeoutTimeUnit) {
         this.apiKey = apiKey;
+        this.xAnotherHeader = xAnotherHeader;
+        this.timeout = timeout;
+        this.timeoutTimeUnit = timeoutTimeUnit;
+    }
+
+    public Optional<Integer> getTimeout() {
+        return timeout;
+    }
+
+    public TimeUnit getTimeoutTimeUnit() {
+        return timeoutTimeUnit;
     }
 
     public Map<String, String> getHeaders() {
         Map<String, String> headers = new HashMap<>();
         if (this.apiKey != null) {
             headers.put("X-FERN-API-KEY", this.apiKey);
+        }
+        if (this.xAnotherHeader != null) {
+            headers.put("X-Another-Header", this.xAnotherHeader);
         }
         return headers;
     }
@@ -28,13 +50,35 @@ public final class RequestOptions {
     public static final class Builder {
         private String apiKey = null;
 
+        private String xAnotherHeader = null;
+
+        private Optional<Integer> timeout = Optional.empty();
+
+        private TimeUnit timeoutTimeUnit = TimeUnit.SECONDS;
+
         public Builder apiKey(String apiKey) {
             this.apiKey = apiKey;
             return this;
         }
 
+        public Builder xAnotherHeader(String xAnotherHeader) {
+            this.xAnotherHeader = xAnotherHeader;
+            return this;
+        }
+
+        public Builder timeout(Integer timeout) {
+            this.timeout = Optional.of(timeout);
+            return this;
+        }
+
+        public Builder timeout(Integer timeout, TimeUnit timeoutTimeUnit) {
+            this.timeout = Optional.of(timeout);
+            this.timeoutTimeUnit = timeoutTimeUnit;
+            return this;
+        }
+
         public RequestOptions build() {
-            return new RequestOptions(apiKey);
+            return new RequestOptions(apiKey, xAnotherHeader, timeout, timeoutTimeUnit);
         }
     }
 }

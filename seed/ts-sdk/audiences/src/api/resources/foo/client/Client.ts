@@ -3,9 +3,9 @@
  */
 
 import * as core from "../../../../core";
-import * as SeedAudiences from "../../..";
-import * as serializers from "../../../../serialization";
-import * as errors from "../../../../errors";
+import * as SeedAudiences from "../../../index";
+import * as serializers from "../../../../serialization/index";
+import * as errors from "../../../../errors/index";
 
 export declare namespace Foo {
     interface Options {
@@ -13,20 +13,35 @@ export declare namespace Foo {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class Foo {
     constructor(protected readonly _options: Foo.Options) {}
 
+    /**
+     * @param {SeedAudiences.FindRequest} request
+     * @param {Foo.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.foo.find({
+     *         optionalString: "string",
+     *         publicProperty: "string",
+     *         privateProperty: 1
+     *     })
+     */
     public async find(
         request: SeedAudiences.FindRequest = {},
         requestOptions?: Foo.RequestOptions
     ): Promise<SeedAudiences.ImportingType> {
         const { optionalString, ..._body } = request;
-        const _queryParams: Record<string, string | string[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (optionalString != null) {
             _queryParams["optionalString"] = optionalString;
         }
@@ -36,17 +51,21 @@ export class Foo {
             method: "POST",
             headers: {
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/audiences",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
-            body: await serializers.FindRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            requestType: "json",
+            body: serializers.FindRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return await serializers.ImportingType.parseOrThrow(_response.body, {
+            return serializers.ImportingType.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,

@@ -17,6 +17,7 @@ export declare namespace FunctionInvocation {
         arguments_?: Argument[];
         block?: BlockConfiguration;
         optionalSafeCall?: boolean;
+        useFullPath?: boolean;
     }
 }
 export class FunctionInvocation extends AstNode {
@@ -28,6 +29,7 @@ export class FunctionInvocation extends AstNode {
     // after a traditional function invocation.
     public block: BlockConfiguration | undefined;
     public optionalSafeCall: boolean;
+    public useFullPath: boolean;
 
     constructor({
         baseFunction,
@@ -35,6 +37,7 @@ export class FunctionInvocation extends AstNode {
         arguments_ = [],
         block,
         optionalSafeCall,
+        useFullPath = true,
         ...rest
     }: FunctionInvocation.Init) {
         super(rest);
@@ -44,6 +47,8 @@ export class FunctionInvocation extends AstNode {
         this.block = block;
         this.optionalSafeCall =
             optionalSafeCall ?? (this.onObject instanceof Variable ? this.onObject.isOptional : false);
+
+        this.useFullPath = useFullPath;
     }
 
     private writeBlock(startingTabSpaces: number) {
@@ -64,8 +69,30 @@ export class FunctionInvocation extends AstNode {
         }
     }
 
-    private writeArgmuments(): string | undefined {
-        return this.arguments_.length > 0 ? `(${this.arguments_.map((a) => a.write({})).join(", ")})` : undefined;
+    private writeArgmuments(startingTabSpaces: number) {
+        if (this.arguments_.length > 2) {
+            this.addText({ stringContent: "(", appendToLastString: true });
+            this.arguments_.forEach((arg, idx) =>
+                this.addText({
+                    stringContent: arg.write({}),
+                    appendToLastString: false,
+                    templateString: idx < this.arguments_.length - 1 ? "%s," : undefined,
+                    startingTabSpaces: this.tabSizeSpaces + startingTabSpaces
+                })
+            );
+            this.addText({ stringContent: ")", appendToLastString: false, startingTabSpaces });
+        } else if (this.arguments_.length > 0) {
+            this.addText({ stringContent: "(", appendToLastString: true });
+            this.arguments_.forEach((arg, idx) =>
+                this.addText({
+                    stringContent: arg.write({}),
+                    appendToLastString: true,
+                    templateString: idx === 0 ? undefined : ", %s",
+                    startingTabSpaces
+                })
+            );
+            this.addText({ stringContent: ")", appendToLastString: true, startingTabSpaces });
+        }
     }
 
     // When writing the definition
@@ -76,12 +103,12 @@ export class FunctionInvocation extends AstNode {
             startingTabSpaces
         });
         this.addText({
-            stringContent: this.baseFunction?.invocationName ?? this.baseFunction?.name,
+            stringContent: this.baseFunction?.getInvocationName(this.useFullPath),
             templateString: onObject === undefined ? undefined : this.optionalSafeCall ? "&.%s" : ".%s",
             startingTabSpaces,
             appendToLastString: true
         });
-        this.addText({ stringContent: this.writeArgmuments(), appendToLastString: true });
+        this.writeArgmuments(startingTabSpaces);
         this.writeBlock(startingTabSpaces);
     }
 

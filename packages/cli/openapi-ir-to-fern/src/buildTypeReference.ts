@@ -1,11 +1,12 @@
+import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/configuration";
 import { assertNever } from "@fern-api/core-utils";
 import { RelativeFilePath } from "@fern-api/fs-utils";
-import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/project-configuration";
-import { RawSchemas } from "@fern-api/yaml-schema";
 import {
     ArraySchema,
+    DoubleSchema,
     EnumSchema,
-    LiteralSchemaValue,
+    IntSchema,
+    LiteralSchema,
     MapSchema,
     ObjectSchema,
     OneOfSchema,
@@ -13,8 +14,10 @@ import {
     PrimitiveSchema,
     PrimitiveSchemaValue,
     ReferencedSchema,
-    Schema
-} from "@fern-fern/openapi-ir-model/finalIr";
+    Schema,
+    StringSchema
+} from "@fern-api/openapi-ir-sdk";
+import { RawSchemas } from "@fern-api/yaml-schema";
 import { camelCase } from "lodash-es";
 import {
     buildEnumTypeDeclaration,
@@ -23,7 +26,18 @@ import {
 } from "./buildTypeDeclaration";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
 import { getGroupNameForSchema } from "./utils/getGroupNameForSchema";
-import { getDocsFromTypeReference, getTypeFromTypeReference } from "./utils/getTypeFromTypeReference";
+import {
+    getDefaultFromTypeReference,
+    getDocsFromTypeReference,
+    getTypeFromTypeReference,
+    getValidationFromTypeReference
+} from "./utils/getTypeFromTypeReference";
+
+const MIN_INT_32 = -2147483648;
+const MAX_INT_32 = 2147483647;
+
+const MIN_DOUBLE_64 = -1.7976931348623157e308;
+const MAX_DOUBLE_64 = 1.7976931348623157e308;
 
 export function buildTypeReference({
     schema,
@@ -39,8 +53,9 @@ export function buildTypeReference({
     context: OpenApiIrConverterContext;
 }): RawSchemas.TypeReferenceWithDocsSchema {
     switch (schema.type) {
-        case "primitive":
+        case "primitive": {
             return buildPrimitiveTypeReference(schema);
+        }
         case "array":
             return buildArrayTypeReference({ schema, fileContainingReference, context, declarationFile });
         case "map":
@@ -55,20 +70,55 @@ export function buildTypeReference({
         case "enum":
             return buildEnumTypeReference({ schema, fileContainingReference, context, declarationFile });
         case "literal":
-            return buildLiteralTypeReference(schema.value);
+            schema.value;
+            return buildLiteralTypeReference(schema);
         case "object":
             return buildObjectTypeReference({ schema, fileContainingReference, context, declarationFile });
         case "oneOf":
-            return buildOneOfTypeReference({ schema: schema.oneOf, fileContainingReference, context, declarationFile });
+            return buildOneOfTypeReference({ schema: schema.value, fileContainingReference, context, declarationFile });
         default:
             assertNever(schema);
     }
 }
 
 export function buildPrimitiveTypeReference(primitiveSchema: PrimitiveSchema): RawSchemas.TypeReferenceWithDocsSchema {
-    const typeReference = PrimitiveSchemaValue._visit<string>(primitiveSchema.schema, {
+    switch (primitiveSchema.schema.type) {
+        case "string":
+            return buildStringTypeReference({
+                description: primitiveSchema.description,
+                schema: primitiveSchema.schema
+            });
+        case "int":
+            return buildIntegerTypeReference({
+                description: primitiveSchema.description,
+                schema: primitiveSchema.schema
+            });
+        case "float":
+            return buildFloatTypeReference({
+                description: primitiveSchema.description,
+                schema: primitiveSchema.schema
+            });
+        case "double":
+            return buildDoubleTypeReference({
+                description: primitiveSchema.description,
+                schema: primitiveSchema.schema
+            });
+        case "boolean":
+            return buildBooleanTypeReference({
+                description: primitiveSchema.description,
+                schema: primitiveSchema.schema
+            });
+        case "int64":
+            return buildLongTypeReference({
+                description: primitiveSchema.description,
+                schema: primitiveSchema.schema
+            });
+    }
+    const typeReference = primitiveSchema.schema._visit({
         int: () => "integer",
         int64: () => "long",
+        uint: () => "uint",
+        uint64: () => "uint64",
         float: () => "double",
         double: () => "double",
         string: () => "string",
@@ -76,7 +126,7 @@ export function buildPrimitiveTypeReference(primitiveSchema: PrimitiveSchema): R
         date: () => "date",
         base64: () => "base64",
         boolean: () => "boolean",
-        _unknown: () => "unknown"
+        _other: () => "unknown"
     });
     if (primitiveSchema.description != null) {
         return {
@@ -85,6 +135,243 @@ export function buildPrimitiveTypeReference(primitiveSchema: PrimitiveSchema): R
         };
     }
     return typeReference;
+}
+
+function buildBooleanTypeReference({
+    description,
+    schema
+}: {
+    description: string | undefined;
+    schema: PrimitiveSchemaValue.Boolean;
+}): RawSchemas.TypeReferenceWithDocsSchema {
+    const type = "boolean";
+    if (description == null && schema.default == null) {
+        return type;
+    }
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type
+    };
+    if (description != null) {
+        result.docs = description;
+    }
+    if (schema.default != null) {
+        result.default = schema.default;
+    }
+    return result;
+}
+
+function buildLongTypeReference({
+    description,
+    schema
+}: {
+    description: string | undefined;
+    schema: PrimitiveSchemaValue.Int64;
+}): RawSchemas.TypeReferenceWithDocsSchema {
+    const type = "long";
+    if (description == null && schema.default == null) {
+        return type;
+    }
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type
+    };
+    if (description != null) {
+        result.docs = description;
+    }
+    if (schema.default != null) {
+        result.default = schema.default;
+    }
+    return result;
+}
+
+function buildStringTypeReference({
+    description,
+    schema
+}: {
+    description: string | undefined;
+    schema: PrimitiveSchemaValue.String;
+}): RawSchemas.TypeReferenceWithDocsSchema {
+    const type = "string";
+    const validation = maybeStringValidation(schema);
+    if (description == null && schema.default == null && validation == null) {
+        return type;
+    }
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type
+    };
+    if (description != null) {
+        result.docs = description;
+    }
+    if (schema.default != null) {
+        result.default = schema.default;
+    }
+    if (validation != null) {
+        result.validation = validation;
+    }
+    return result;
+}
+
+function buildIntegerTypeReference({
+    description,
+    schema
+}: {
+    description: string | undefined;
+    schema: PrimitiveSchemaValue.Int;
+}): RawSchemas.TypeReferenceWithDocsSchema {
+    const type = "integer";
+    const validation = maybeNumberValidation(schema, type);
+    if (description == null && schema.default == null && validation == null) {
+        return type;
+    }
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type
+    };
+    if (description != null) {
+        result.docs = description;
+    }
+    if (schema.default != null) {
+        result.default = schema.default;
+    }
+    if (validation != null) {
+        result.validation = validation;
+    }
+    return result;
+}
+
+function buildFloatTypeReference({
+    description,
+    schema
+}: {
+    description: string | undefined;
+    schema: PrimitiveSchemaValue.Float;
+}): RawSchemas.TypeReferenceWithDocsSchema {
+    const type = "float";
+    if (description == null) {
+        return type;
+    }
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type
+    };
+    if (description != null) {
+        result.docs = description;
+    }
+    return result;
+}
+
+function buildDoubleTypeReference({
+    description,
+    schema
+}: {
+    description: string | undefined;
+    schema: PrimitiveSchemaValue.Double;
+}): RawSchemas.TypeReferenceWithDocsSchema {
+    const type = "double";
+    const validation = maybeNumberValidation(schema, type);
+    if (description == null && schema.default == null && validation == null) {
+        return type;
+    }
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type
+    };
+    if (description != null) {
+        result.docs = description;
+    }
+    if (schema.default != null) {
+        result.default = schema.default;
+    }
+    if (validation != null) {
+        result.validation = validation;
+    }
+    return result;
+}
+
+function maybeStringValidation(
+    schema: Omit<StringSchema, "default"> | undefined
+): RawSchemas.ValidationSchema | undefined {
+    if (schema == null) {
+        return undefined;
+    }
+    const { format, pattern, minLength, maxLength } = schema;
+    const validFormat = maybeValidFormat(format);
+    if (validFormat == null && pattern == null && minLength == null && maxLength == null) {
+        return undefined;
+    }
+    return {
+        format: validFormat,
+        pattern,
+        minLength,
+        maxLength
+    };
+}
+
+function maybeValidFormat(format: string | undefined): string | undefined {
+    // We only accept the set of OpenAPI formats that are explicitly listed at the following:
+    // https://swagger.io/docs/specification/data-models/data-types/#string
+    switch (format) {
+        case "date":
+        case "date-time":
+        case "password":
+        case "byte":
+        case "bytes":
+        case "binary":
+        case "email":
+        case "uuid":
+        case "uri":
+        case "hostname":
+        case "ipv4":
+        case "ipv6":
+            return format;
+        default:
+            return undefined;
+    }
+}
+
+function maybeNumberValidation(
+    schema: Omit<IntSchema, "default"> | Omit<DoubleSchema, "default"> | undefined,
+    type: "integer" | "double"
+): RawSchemas.ValidationSchema | undefined {
+    if (schema == null) {
+        return undefined;
+    }
+    let { minimum, maximum, multipleOf } = schema;
+    const { exclusiveMinimum, exclusiveMaximum } = schema;
+    minimum = makeUndefinedIfOutsideRange(minimum, type);
+    maximum = makeUndefinedIfOutsideRange(maximum, type);
+    multipleOf = makeUndefinedIfOutsideRange(multipleOf, type);
+    if (
+        minimum == null &&
+        maximum == null &&
+        exclusiveMinimum == null &&
+        exclusiveMaximum == null &&
+        multipleOf == null
+    ) {
+        return undefined;
+    }
+
+    return {
+        min: minimum,
+        max: maximum,
+        exclusiveMin: exclusiveMinimum,
+        exclusiveMax: exclusiveMaximum,
+        multipleOf
+    };
+}
+
+/**
+ * Ensures that a number is within the specified range for its type.
+ * Returns `undefined` if the number is outside the valid range for the given type.
+ *
+ * @param num - The number to check. Can be `undefined`.
+ * @param type - The type of the number, either "integer" or "double".
+ * @returns The number if it is within the valid range, or `undefined` if it is outside the range.
+ */
+function makeUndefinedIfOutsideRange(num: number | undefined, type: "integer" | "double"): number | undefined {
+    if (num === undefined) {
+        return undefined;
+    }
+
+    const [min, max] = type === "integer" ? [MIN_INT_32, MAX_INT_32] : [MIN_DOUBLE_64, MAX_DOUBLE_64];
+
+    return num < min || num > max ? undefined : num;
 }
 
 export function buildReferenceTypeReference({
@@ -97,14 +384,17 @@ export function buildReferenceTypeReference({
     context: OpenApiIrConverterContext;
 }): RawSchemas.TypeReferenceWithDocsSchema {
     const resolvedSchema = context.getSchema(schema.schema);
+    if (resolvedSchema == null) {
+        return "unknown";
+    }
     const schemaName = getSchemaName(resolvedSchema) ?? schema.schema;
     const groupName = getGroupNameForSchema(resolvedSchema);
     const typeWithPrefix = getPrefixedType({
         context,
         fileContainingReference,
         declarationFile:
-            groupName != null
-                ? RelativeFilePath.of(`${camelCase(groupName)}.yml`)
+            groupName != null && groupName.length > 0
+                ? RelativeFilePath.of(`${groupName.map(camelCase).join("/")}.yml`)
                 : RelativeFilePath.of(FERN_PACKAGE_MARKER_FILENAME),
         type: schemaName
     });
@@ -187,29 +477,52 @@ export function buildOptionalTypeReference({
     });
     const itemType = getTypeFromTypeReference(itemTypeReference);
     const itemDocs = getDocsFromTypeReference(itemTypeReference);
+    const itemDefault = getDefaultFromTypeReference(itemTypeReference);
+    const itemValidation = getValidationFromTypeReference(itemTypeReference);
     const type = itemType.startsWith("optional<") ? itemType : `optional<${itemType}>`;
-    if (schema.description == null && itemDocs == null) {
+    if (schema.description == null && itemDocs == null && itemDefault == null && itemValidation == null) {
         return type;
     }
-    return {
-        docs: schema.description ?? itemDocs,
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
         type
     };
+    if (schema.description != null || itemDocs != null) {
+        result.docs = schema.description ?? itemDocs;
+    }
+    if (itemDefault != null) {
+        result.default = itemDefault;
+    }
+    if (itemValidation != null) {
+        result.validation = itemValidation;
+    }
+    return result;
 }
 
 export function buildUnknownTypeReference(): RawSchemas.TypeReferenceWithDocsSchema {
     return "unknown";
 }
 
-export function buildLiteralTypeReference(value: LiteralSchemaValue): RawSchemas.TypeReferenceWithDocsSchema {
-    switch (value.type) {
-        case "boolean":
-            return `literal<${value.boolean}>`;
-        case "string":
-            return `literal<"${value.string}">`;
+export function buildLiteralTypeReference(schema: LiteralSchema): RawSchemas.TypeReferenceWithDocsSchema {
+    let value: string;
+    switch (schema.value.type) {
+        case "boolean": {
+            value = `literal<${schema.value.value}>`;
+            break;
+        }
+        case "string": {
+            value = `literal<"${schema.value.value}">`;
+            break;
+        }
         default:
-            assertNever(value);
+            assertNever(schema.value);
     }
+    if (schema.description == null) {
+        return value;
+    }
+    return {
+        type: value,
+        docs: schema.description
+    };
 }
 
 export function buildEnumTypeReference({
@@ -230,13 +543,19 @@ export function buildEnumTypeReference({
         schema: enumTypeDeclaration.schema
     });
     const prefixedType = getPrefixedType({ type: name, fileContainingReference, declarationFile, context });
-    if (schema.description == null) {
+    if (schema.description == null && schema.default == null) {
         return prefixedType;
     }
-    return {
-        type: prefixedType,
-        docs: schema.description
+    const result: RawSchemas.TypeReferenceWithDocsSchema = {
+        type: prefixedType
     };
+    if (schema.description != null) {
+        result.docs = schema.description;
+    }
+    if (schema.default != null) {
+        result.default = schema.default.value;
+    }
+    return result;
 }
 
 export function buildObjectTypeReference({
@@ -335,6 +654,6 @@ function getSchemaName(schema: Schema): string | undefined {
         optional: (s) => s.nameOverride ?? s.generatedName,
         nullable: (s) => s.nameOverride ?? s.generatedName,
         unknown: (s) => s.nameOverride ?? s.generatedName,
-        _unknown: () => undefined
+        _other: () => undefined
     });
 }

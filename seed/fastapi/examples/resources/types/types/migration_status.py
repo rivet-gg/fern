@@ -8,7 +8,9 @@ T_Result = typing.TypeVar("T_Result")
 
 class MigrationStatus(str, enum.Enum):
     """
-    from seed.examples import MigrationStatus
+    Examples
+    --------
+    from seed.examples.resources.types import MigrationStatus
 
     MigrationStatus.RUNNING
     """

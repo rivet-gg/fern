@@ -4,21 +4,18 @@ import datetime as dt
 import typing
 import uuid
 
-import typing_extensions
+import pydantic
 
-from ..core.datetime_utils import serialize_datetime
+from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .name import Name
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
-
-class Type(pydantic.BaseModel):
+class Type(UniversalBaseModel):
     """
     Exercises all of the built-in types.
-    ---
+
+    Examples
+    --------
     import datetime
     import uuid
 
@@ -41,7 +38,7 @@ class Type(pydantic.BaseModel):
         ),
         nine="TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcmsu",
         ten=[10, 10],
-        eleven=[11.0],
+        eleven={11.0},
         twelve={"invalid": False, "exists": True},
         thirteen=13,
         fourteen={},
@@ -55,11 +52,14 @@ class Type(pydantic.BaseModel):
                 "07791987-dec3-43b5-8dc4-250ab5dc0478",
             ),
         ],
-        eighteen="eighteen",
         nineteen=Name(
             id="name-129fsdj9",
             value="nineteen",
         ),
+        twenty=20,
+        twentyone=21,
+        twentytwo=22.22,
+        twentythree="23",
     )
     """
 
@@ -75,22 +75,21 @@ class Type(pydantic.BaseModel):
     ten: typing.List[int]
     eleven: typing.Set[float]
     twelve: typing.Dict[str, bool]
-    thirteen: typing.Optional[int]
+    thirteen: typing.Optional[int] = None
     fourteen: typing.Any
     fifteen: typing.List[typing.List[int]]
     sixteen: typing.List[typing.Dict[str, int]]
     seventeen: typing.List[typing.Optional[uuid.UUID]]
-    eighteen: typing_extensions.Literal["eighteen"]
+    eighteen: typing.Literal["eighteen"] = "eighteen"
     nineteen: Name
+    twenty: int
+    twentyone: int
+    twentytwo: float
+    twentythree: str
 
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="forbid")  # type: ignore # Pydantic v2
+    else:
 
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        class Config:
+            extra = pydantic.Extra.forbid

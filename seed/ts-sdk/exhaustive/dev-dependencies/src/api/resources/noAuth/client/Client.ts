@@ -3,9 +3,9 @@
  */
 
 import * as core from "../../../../core";
-import * as Fiddle from "../../..";
+import * as Fiddle from "../../../index";
 import urlJoin from "url-join";
-import * as serializers from "../../../../serialization";
+import * as serializers from "../../../../serialization/index";
 
 export declare namespace NoAuth {
     interface Options {
@@ -14,8 +14,12 @@ export declare namespace NoAuth {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
@@ -24,6 +28,14 @@ export class NoAuth {
 
     /**
      * POST request with no auth
+     *
+     * @param {unknown} request
+     * @param {NoAuth.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.noAuth.postWithNoAuth({
+     *         "key": "value"
+     *     })
      */
     public async postWithNoAuth(
         request?: unknown,
@@ -35,18 +47,22 @@ export class NoAuth {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             body: request,
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.noAuth.postWithNoAuth.Response.parseOrThrow(_response.body, {
+                body: serializers.noAuth.postWithNoAuth.Response.parseOrThrow(_response.body, {
                     unrecognizedObjectKeys: "passthrough",
                     allowUnrecognizedUnionMembers: true,
                     allowUnrecognizedEnumValues: true,
@@ -61,7 +77,7 @@ export class NoAuth {
                     return {
                         ok: false,
                         error: Fiddle.noAuth.postWithNoAuth.Error.badRequestBody(
-                            await serializers.BadObjectRequestInfo.parseOrThrow(_response.error.body, {
+                            serializers.BadObjectRequestInfo.parseOrThrow(_response.error.body, {
                                 unrecognizedObjectKeys: "passthrough",
                                 allowUnrecognizedUnionMembers: true,
                                 allowUnrecognizedEnumValues: true,
@@ -78,7 +94,7 @@ export class NoAuth {
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

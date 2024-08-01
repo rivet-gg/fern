@@ -4,35 +4,43 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .test_case_grade import TestCaseGrade
+from .test_case_result import TestCaseResult
 from .test_case_result_with_stdout import TestCaseResultWithStdout
-from .traced_test_case import TracedTestCase
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 
-class SubmissionStatusForTestCase_Graded(TestCaseResultWithStdout):
-    type: typing_extensions.Literal["graded"]
+class SubmissionStatusForTestCase_Graded(UniversalBaseModel):
+    type: typing.Literal["graded"] = "graded"
+    result: TestCaseResult
+    stdout: str
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class SubmissionStatusForTestCase_GradedV2(pydantic.BaseModel):
-    type: typing_extensions.Literal["gradedV2"]
+class SubmissionStatusForTestCase_GradedV2(UniversalBaseModel):
     value: TestCaseGrade
+    type: typing.Literal["gradedV2"] = "gradedV2"
 
 
-class SubmissionStatusForTestCase_Traced(TracedTestCase):
-    type: typing_extensions.Literal["traced"]
+class SubmissionStatusForTestCase_Traced(UniversalBaseModel):
+    type: typing.Literal["traced"] = "traced"
+    result: TestCaseResultWithStdout
+    trace_responses_size: int = pydantic.Field(alias="traceResponsesSize")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 SubmissionStatusForTestCase = typing.Union[

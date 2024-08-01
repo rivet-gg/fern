@@ -4,10 +4,10 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as SeedMultiUrlEnvironment from "../../..";
-import * as serializers from "../../../../serialization";
+import * as SeedMultiUrlEnvironment from "../../../index";
+import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
-import * as errors from "../../../../errors";
+import * as errors from "../../../../errors/index";
 
 export declare namespace Ec2 {
     interface Options {
@@ -18,14 +18,27 @@ export declare namespace Ec2 {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class Ec2 {
     constructor(protected readonly _options: Ec2.Options) {}
 
+    /**
+     * @param {SeedMultiUrlEnvironment.BootInstanceRequest} request
+     * @param {Ec2.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.ec2.bootInstance({
+     *         size: "string"
+     *     })
+     */
     public async bootInstance(
         request: SeedMultiUrlEnvironment.BootInstanceRequest,
         requestOptions?: Ec2.RequestOptions
@@ -42,13 +55,17 @@ export class Ec2 {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/multi-url-environment",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.BootInstanceRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            requestType: "json",
+            body: serializers.BootInstanceRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -76,7 +93,7 @@ export class Ec2 {
         }
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string> {
         return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

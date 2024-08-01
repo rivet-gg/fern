@@ -26,6 +26,10 @@ export class RequestWrapperParameter extends AbstractRequestParameter {
         };
     }
 
+    public getType(context: SdkContext): ts.TypeNode {
+        return context.requestWrapper.getReferenceToRequestWrapper(this.packageId, this.endpoint.name);
+    }
+
     public getInitialStatements(
         context: SdkContext,
         { variablesInScope }: { variablesInScope: string[] }
@@ -141,6 +145,10 @@ export class RequestWrapperParameter extends AbstractRequestParameter {
             queryParamSetter,
             queryParamItemSetter
         });
+    }
+
+    public isOptional({ context }: { context: SdkContext }): boolean {
+        return this.getGeneratedRequestWrapper(context).areAllPropertiesOptional(context);
     }
 
     public getReferenceToQueryParameter(queryParameterKey: string, context: SdkContext): ts.Expression {

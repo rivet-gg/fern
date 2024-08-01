@@ -1,8 +1,7 @@
-import { Audiences } from "@fern-api/config-management-commons";
+import { Audiences } from "@fern-api/configuration";
 import { AbsoluteFilePath, stringifyLargeObject } from "@fern-api/fs-utils";
 import { Project } from "@fern-api/project-loader";
 import { convertIrToFdrApi } from "@fern-api/register";
-import { convertOpenApiWorkspaceToFernWorkspace } from "@fern-api/workspace-loader";
 import { writeFile } from "fs/promises";
 import path from "path";
 import { CliContext } from "../../cli-context/CliContext";
@@ -22,21 +21,22 @@ export async function generateFdrApiDefinitionForWorkspaces({
     await Promise.all(
         project.apiWorkspaces.map(async (workspace) => {
             await cliContext.runTaskForWorkspace(workspace, async (context) => {
-                const fernWorkspace =
-                    workspace.type === "openapi"
-                        ? await convertOpenApiWorkspaceToFernWorkspace(workspace, context)
-                        : workspace;
-
-                const intermediateRepresentation = await generateIrForFernWorkspace({
+                const fernWorkspace = await workspace.toFernWorkspace({ context });
+                const ir = await generateIrForFernWorkspace({
                     workspace: fernWorkspace,
                     context,
                     generationLanguage: undefined,
                     audiences,
+                    keywords: undefined,
                     smartCasing: false,
-                    disableExamples: false
+                    disableExamples: false,
+                    readme: undefined
                 });
 
-                const apiDefinition = convertIrToFdrApi(intermediateRepresentation, {});
+                const apiDefinition = convertIrToFdrApi({
+                    ir,
+                    snippetsConfig: {}
+                });
 
                 const resolvedOutputFilePath = path.resolve(outputFilepath);
                 await writeFile(resolvedOutputFilePath, await stringifyLargeObject(apiDefinition, { pretty: true }));

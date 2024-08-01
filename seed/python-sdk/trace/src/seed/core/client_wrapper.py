@@ -4,6 +4,8 @@ import typing
 
 import httpx
 
+from .http_client import AsyncHttpClient, HttpClient
+
 
 class BaseClientWrapper:
     def __init__(
@@ -12,16 +14,18 @@ class BaseClientWrapper:
         x_random_header: typing.Optional[str] = None,
         token: typing.Optional[typing.Union[str, typing.Callable[[], str]]] = None,
         base_url: str,
+        timeout: typing.Optional[float] = None,
     ):
         self._x_random_header = x_random_header
         self._token = token
         self._base_url = base_url
+        self._timeout = timeout
 
     def get_headers(self) -> typing.Dict[str, str]:
         headers: typing.Dict[str, str] = {
             "X-Fern-Language": "Python",
-            "X-Fern-SDK-Name": "seed",
-            "X-Fern-SDK-Version": "0.0.0",
+            "X-Fern-SDK-Name": "fern_trace",
+            "X-Fern-SDK-Version": "0.0.1",
         }
         if self._x_random_header is not None:
             headers["X-Random-Header"] = self._x_random_header
@@ -39,6 +43,9 @@ class BaseClientWrapper:
     def get_base_url(self) -> str:
         return self._base_url
 
+    def get_timeout(self) -> typing.Optional[float]:
+        return self._timeout
+
 
 class SyncClientWrapper(BaseClientWrapper):
     def __init__(
@@ -47,10 +54,11 @@ class SyncClientWrapper(BaseClientWrapper):
         x_random_header: typing.Optional[str] = None,
         token: typing.Optional[typing.Union[str, typing.Callable[[], str]]] = None,
         base_url: str,
+        timeout: typing.Optional[float] = None,
         httpx_client: httpx.Client,
     ):
-        super().__init__(x_random_header=x_random_header, token=token, base_url=base_url)
-        self.httpx_client = httpx_client
+        super().__init__(x_random_header=x_random_header, token=token, base_url=base_url, timeout=timeout)
+        self.httpx_client = HttpClient(httpx_client=httpx_client)
 
 
 class AsyncClientWrapper(BaseClientWrapper):
@@ -60,7 +68,8 @@ class AsyncClientWrapper(BaseClientWrapper):
         x_random_header: typing.Optional[str] = None,
         token: typing.Optional[typing.Union[str, typing.Callable[[], str]]] = None,
         base_url: str,
+        timeout: typing.Optional[float] = None,
         httpx_client: httpx.AsyncClient,
     ):
-        super().__init__(x_random_header=x_random_header, token=token, base_url=base_url)
-        self.httpx_client = httpx_client
+        super().__init__(x_random_header=x_random_header, token=token, base_url=base_url, timeout=timeout)
+        self.httpx_client = AsyncHttpClient(httpx_client=httpx_client)

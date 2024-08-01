@@ -13,14 +13,12 @@ export function convertTypeShape(irType: Ir.types.Type): APIV1Write.TypeShape {
         enum: (enum_) => {
             return {
                 type: "enum",
+                default: enum_.default != null ? enum_.default.name.wireValue : undefined,
                 values: enum_.values.map(
                     (value): APIV1Write.EnumValue => ({
                         description: value.docs ?? undefined,
                         value: value.name.wireValue,
-                        availability:
-                            value.availability != null
-                                ? convertIrAvailability({ availability: value.availability })
-                                : undefined
+                        availability: convertIrAvailability(value.availability)
                     })
                 )
             };
@@ -34,10 +32,7 @@ export function convertTypeShape(irType: Ir.types.Type): APIV1Write.TypeShape {
                         description: property.docs ?? undefined,
                         key: property.name.wireValue,
                         valueType: convertTypeReference(property.valueType),
-                        availability:
-                            property.availability != null
-                                ? convertIrAvailability({ availability: property.availability })
-                                : undefined
+                        availability: convertIrAvailability(property.availability)
                     })
                 )
             };
@@ -48,10 +43,7 @@ export function convertTypeShape(irType: Ir.types.Type): APIV1Write.TypeShape {
                     return {
                         key: baseProperty.name.wireValue,
                         valueType: convertTypeReference(baseProperty.valueType),
-                        availability:
-                            baseProperty.availability != null
-                                ? convertIrAvailability({ availability: baseProperty.availability })
-                                : undefined,
+                        availability: convertIrAvailability(baseProperty.availability),
                         description: baseProperty.docs
                     };
                 }
@@ -181,21 +173,22 @@ export function convertTypeReference(irTypeReference: Ir.types.TypeReference): A
         primitive: (primitive) => {
             return {
                 type: "primitive",
-                value: Ir.types.PrimitiveType._visit<APIV1Write.PrimitiveType>(primitive, {
+                value: Ir.types.PrimitiveTypeV1._visit<APIV1Write.PrimitiveType>(primitive.v1, {
                     integer: () => {
-                        return {
-                            type: "integer"
-                        };
+                        return convertInteger(primitive.v2);
                     },
-                    double: () => {
+                    float: () => {
+                        // TODO: Add support for float types in FDR. We render them as double for now
+                        // (they have the same JSON representation).
                         return {
                             type: "double"
                         };
                     },
+                    double: () => {
+                        return convertDouble(primitive.v2);
+                    },
                     string: () => {
-                        return {
-                            type: "string"
-                        };
+                        return convertString(primitive.v2);
                     },
                     long: () => {
                         return {
@@ -227,8 +220,23 @@ export function convertTypeReference(irTypeReference: Ir.types.TypeReference): A
                             type: "base64"
                         };
                     },
+                    bigInteger: () => {
+                        return {
+                            type: "bigInteger"
+                        };
+                    },
+                    uint: () => {
+                        return {
+                            type: "uint"
+                        };
+                    },
+                    uint64: () => {
+                        return {
+                            type: "uint64"
+                        };
+                    },
                     _other: () => {
-                        throw new Error("Unknown primitive: " + primitive);
+                        throw new Error("Unknown primitive: " + primitive.v1);
                     }
                 })
             };
@@ -242,4 +250,38 @@ export function convertTypeReference(irTypeReference: Ir.types.TypeReference): A
             throw new Error("Unknown Type reference: " + irTypeReference.type);
         }
     });
+}
+
+function convertString(primitive: Ir.PrimitiveTypeV2 | undefined): APIV1Write.PrimitiveType {
+    const rules: Ir.StringValidationRules | undefined =
+        primitive != null && primitive.type === "string" ? primitive.validation : undefined;
+    return {
+        type: "string",
+        regex: rules != null ? rules.pattern : undefined,
+        minLength: rules != null ? rules.minLength : undefined,
+        maxLength: rules != null ? rules.minLength : undefined,
+        default: primitive != null && primitive.type === "string" ? primitive.default : undefined
+    };
+}
+
+function convertInteger(primitive: Ir.PrimitiveTypeV2 | undefined): APIV1Write.PrimitiveType {
+    const rules: Ir.IntegerValidationRules | undefined =
+        primitive != null && primitive.type === "integer" ? primitive.validation : undefined;
+    return {
+        type: "integer",
+        minimum: rules != null ? rules.min : undefined,
+        maximum: rules != null ? rules.max : undefined,
+        default: primitive != null && primitive.type === "integer" ? primitive.default : undefined
+    };
+}
+
+function convertDouble(primitive: Ir.PrimitiveTypeV2 | undefined): APIV1Write.PrimitiveType {
+    const rules: Ir.DoubleValidationRules | undefined =
+        primitive != null && primitive.type === "double" ? primitive.validation : undefined;
+    return {
+        type: "double",
+        minimum: rules != null ? rules.min : undefined,
+        maximum: rules != null ? rules.max : undefined,
+        default: primitive != null && primitive.type === "double" ? primitive.default : undefined
+    };
 }

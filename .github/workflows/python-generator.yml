@@ -39,10 +39,40 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
 
-      - name: Install Dependencies
+      - name: Update models for testing
         working-directory: ./generators/python
-        run: poetry install
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: |
+          npm install -g fern-api
 
-      - name: Unit Test
+          docker build -f ./pydantic/Dockerfile -t ferntest/fern-pydantic-model:0.0.0 .
+          cd tests/utils/example_models
+          fern generate --group dummy_types --local
+
+          cd ../typeddict_models
+          fern generate --group dummy_td_types --local
+
+      - name: Install Dependencies - Pydantic V1
+        working-directory: ./generators/python
+        run: |
+          poetry add pydantic=^1.10
+          poetry lock
+          poetry install
+      - name: Unit Test - Pydantic V1
         working-directory: ./generators/python
         run: poetry run pytest -sv
+
+      - name: Install Dependencies - Pydantic V2
+        working-directory: ./generators/python
+        run: |
+          poetry remove fern-fern-generator-exec-sdk
+          poetry add pydantic=^2.8
+          poetry lock
+          poetry install
+      - name: Unit Test - Pydantic V2
+        working-directory: ./generators/python
+        # Run specific tests:
+        #   Some tests pull in dependencies that have older versions of internal SDKs installed, which are
+        #   incompatible with Pydantic V2 outright (specifically the use of __root__ in unions with utils).
+        run: poetry run pytest -sv ./tests/utils/ --ignore ./tests/utils/casing

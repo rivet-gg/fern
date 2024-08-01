@@ -6,8 +6,9 @@ import { Import } from "../Import";
 export interface Condition {
     rightSide?: string | AstNode;
     leftSide?: string | AstNode;
+    negated?: boolean;
     operation?: string;
-    expressions: AstNode[];
+    expressions: (AstNode | string)[];
 }
 export declare namespace ConditionalStatement {
     export interface Init extends AstNode.Init {
@@ -30,7 +31,8 @@ export class ConditionalStatement extends AstNode {
 
     private writeCondition(startingTabSpaces: number, condition: Condition, type: "if" | "elsif" | "else"): void {
         const updatedType =
-            condition.operation === "!" && (condition.leftSide === undefined || condition.rightSide === undefined)
+            condition.negated === true ||
+            (condition.operation === "!" && (condition.leftSide === undefined || condition.rightSide === undefined))
                 ? "unless"
                 : type;
         const leftString = condition.leftSide instanceof AstNode ? condition.leftSide.write({}) : condition.leftSide;
@@ -41,14 +43,19 @@ export class ConditionalStatement extends AstNode {
             templateString: `${updatedType} %s`,
             startingTabSpaces
         });
-        if (condition.leftSide !== undefined && condition.rightSide !== undefined) {
+        if (condition.leftSide !== undefined && condition.rightSide !== undefined && condition.operation !== "!") {
             this.addText({
+                templateString: ` ${condition.operation} %s`,
                 stringContent: rightString,
-                startingTabSpaces
+                startingTabSpaces,
+                appendToLastString: true
             });
         }
         condition.expressions.forEach((exp) =>
-            this.addText({ stringContent: exp.write({}), startingTabSpaces: this.tabSizeSpaces + startingTabSpaces })
+            this.addText({
+                stringContent: exp instanceof AstNode ? exp.write({}) : exp,
+                startingTabSpaces: this.tabSizeSpaces + startingTabSpaces
+            })
         );
     }
 

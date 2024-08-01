@@ -1,4 +1,4 @@
-import { GeneratorName } from "@fern-api/generators-configuration";
+import { GeneratorName } from "@fern-api/configuration";
 import { IrVersions } from "../../ir-versions";
 import {
     GeneratorWasNeverUpdatedToConsumeNewIR,
@@ -35,7 +35,9 @@ export const V17_TO_V16_MIGRATION: IrMigration<
         [GeneratorName.RUBY_MODEL]: GeneratorWasNotCreatedYet,
         [GeneratorName.RUBY_SDK]: GeneratorWasNotCreatedYet,
         [GeneratorName.CSHARP_MODEL]: GeneratorWasNotCreatedYet,
-        [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet
+        [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet,
+        [GeneratorName.SWIFT_MODEL]: GeneratorWasNotCreatedYet,
+        [GeneratorName.SWIFT_SDK]: GeneratorWasNotCreatedYet
     },
     jsonifyEarlierVersion: (ir) => ir,
     migrateBackwards: (v17, { taskContext, targetGenerator }): IrVersions.V16.ir.IntermediateRepresentation => {

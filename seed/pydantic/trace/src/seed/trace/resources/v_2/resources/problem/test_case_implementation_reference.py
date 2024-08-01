@@ -4,27 +4,30 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .test_case_implementation import TestCaseImplementation
+from .....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from .test_case_function import TestCaseFunction
+from .test_case_implementation_description import TestCaseImplementationDescription
 from .test_case_template_id import TestCaseTemplateId
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
-
-class TestCaseImplementationReference_TemplateId(pydantic.BaseModel):
-    type: typing_extensions.Literal["templateId"]
+class TestCaseImplementationReference_TemplateId(UniversalBaseModel):
     value: TestCaseTemplateId
+    type: typing.Literal["templateId"] = "templateId"
 
 
-class TestCaseImplementationReference_Implementation(TestCaseImplementation):
-    type: typing_extensions.Literal["implementation"]
+class TestCaseImplementationReference_Implementation(UniversalBaseModel):
+    type: typing.Literal["implementation"] = "implementation"
+    description: TestCaseImplementationDescription
+    function: TestCaseFunction
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 TestCaseImplementationReference = typing.Union[

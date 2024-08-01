@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import os
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Optional, Sequence, Set, Type
+from typing import List, Optional, Sequence, Set, Type
+
+from fern.generator_exec.resources import GithubOutputMode, LicenseConfig, PypiMetadata
+from isort import file
 
 from fern_python.codegen import AST
 from fern_python.codegen.pyproject_toml import PyProjectToml, PyProjectTomlPackageConfig
 
 from .dependency_manager import DependencyManager
 from .filepath import Filepath
-from .module_manager import ModuleManager
+from .module_manager import ModuleExport, ModuleManager
 from .reference_resolver_impl import ReferenceResolverImpl
 from .source_file import SourceFile, SourceFileImpl
 from .writer_impl import WriterImpl
@@ -34,21 +38,24 @@ class Project:
         *,
         filepath: str,
         relative_path_to_project: str,
-        python_version: str = "3.7",
+        python_version: str = "^3.8",
         project_config: ProjectConfig = None,
         should_format_files: bool,
         sorted_modules: Optional[Sequence[str]] = None,
         flat_layout: bool = False,
         whitelabel: bool = False,
+        pypi_metadata: Optional[PypiMetadata],
+        github_output_mode: Optional[GithubOutputMode],
+        license_: Optional[LicenseConfig],
     ) -> None:
         if flat_layout:
-            self._project_filepath = (
-                filepath if project_config is None else os.path.join(filepath, relative_path_to_project)
-            )
+            self._project_relative_filepath = relative_path_to_project
         else:
-            self._project_filepath = (
-                filepath if project_config is None else os.path.join(filepath, "src", relative_path_to_project)
-            )
+            self._project_relative_filepath = os.path.join("src", relative_path_to_project)
+
+        self._project_filepath = (
+            filepath if project_config is None else os.path.join(filepath, self._project_relative_filepath)
+        )
         self._generate_readme = True
         self._root_filepath = filepath
         self._relative_path_to_project = relative_path_to_project
@@ -58,14 +65,27 @@ class Project:
         self._dependency_manager = DependencyManager()
         self._should_format_files = should_format_files
         self._whitelabel = whitelabel
+        self._github_output_mode = github_output_mode
+        self._pypi_metadata = pypi_metadata
+        self.license_ = license_
+        self._extras: typing.Dict[str, List[str]] = {}
+
+    def add_init_exports(self, path: AST.ModulePath, exports: List[ModuleExport]) -> None:
+        self._module_manager.register_additional_exports(path, exports)
 
     def add_dependency(self, dependency: AST.Dependency) -> None:
         self._dependency_manager.add_dependency(dependency)
 
+    def add_dev_dependency(self, dependency: AST.Dependency) -> None:
+        self._dependency_manager.add_dev_dependency(dependency)
+
+    def add_extra(self, extra: typing.Dict[str, List[str]]) -> None:
+        self._extras = extra
+
     def set_generate_readme(self, generate_readme: bool) -> None:
         self._generate_readme = generate_readme
 
-    def source_file(self, filepath: Filepath) -> SourceFile:
+    def source_file(self, filepath: Filepath, from_src: Optional[bool] = True) -> SourceFile:
         """
         with project.source_file() as source_file:
             ...
@@ -73,8 +93,7 @@ class Project:
 
         def on_finish(source_file: SourceFileImpl) -> None:
             self._module_manager.register_exports(
-                filepath=filepath,
-                exports=source_file.get_exports(),
+                filepath=filepath, exports=source_file.get_exports() if from_src else set(), from_src=from_src
             )
 
         module = filepath.to_module()
@@ -90,21 +109,58 @@ class Project:
         )
         return source_file
 
-    def write_source_file(self, *, source_file: SourceFile, filepath: Filepath) -> None:
-        source_file.write_to_file(filepath=self.get_source_file_filepath(filepath))
+    def write_source_file(
+        self, *, source_file: SourceFile, filepath: Filepath, include_src_root: Optional[bool] = True
+    ) -> None:
+        source_file.write_to_file(
+            filepath=self.get_source_file_filepath(
+                filepath, include_src_root=(include_src_root if include_src_root is not None else True)
+            )
+        )
 
-    def get_source_file_filepath(self, filepath: Filepath) -> str:
-        return os.path.join(self._project_filepath, str(filepath))
+    def get_relative_source_file_filepath(self, filepath: Filepath) -> str:
+        return os.path.join(self._project_relative_filepath, str(filepath))
 
-    def add_source_file_from_disk(self, *, path_on_disk: str, filepath_in_project: Filepath, exports: Set[str]) -> None:
-        with open(path_on_disk, "r") as existing_file:
-            writer = WriterImpl(should_format=self._should_format_files)
-            writer.write(existing_file.read())
-            writer.write_to_file(filepath=self.get_source_file_filepath(filepath_in_project))
+    def get_source_file_filepath(self, filepath: Filepath, include_src_root: bool) -> str:
+        return (
+            os.path.join(self._project_filepath, str(filepath))
+            if include_src_root
+            else os.path.join(self._root_filepath, str(filepath))
+        )
+
+    def register_export_in_project(self, filepath_in_project: Filepath, exports: Set[str]) -> None:
         self._module_manager.register_exports(
             filepath=filepath_in_project,
             exports=exports,
         )
+
+    def add_source_file_from_disk(
+        self,
+        *,
+        path_on_disk: str,
+        filepath_in_project: Filepath,
+        exports: Set[str],
+        include_src_root: Optional[bool] = True,
+        string_replacements: Optional[dict[str, str]] = None,
+    ) -> None:
+        with open(path_on_disk, "r") as existing_file:
+            writer = WriterImpl(should_format=self._should_format_files)
+            read_file = existing_file.read()
+            if string_replacements is not None:
+                for k, v in string_replacements.items():
+                    read_file = read_file.replace(k, v)
+
+            writer.write(read_file)
+            writer.write_to_file(
+                filepath=self.get_source_file_filepath(
+                    filepath_in_project, include_src_root=(include_src_root if include_src_root is not None else True)
+                )
+            )
+        if include_src_root:
+            self._module_manager.register_exports(
+                filepath=filepath_in_project,
+                exports=exports,
+            )
 
     def add_file(self, filepath: str, contents: str) -> None:
         file = Path(os.path.join(self._root_filepath, filepath))
@@ -112,7 +168,7 @@ class Project:
         file.write_text(contents)
 
     def finish(self) -> None:
-        self._module_manager.write_modules(filepath=self._project_filepath)
+        self._module_manager.write_modules(base_filepath=self._root_filepath, filepath=self._project_filepath)
         if self._project_config is not None:
             # generate pyproject.toml
             py_project_toml = PyProjectToml(
@@ -122,6 +178,10 @@ class Project:
                 path=self._root_filepath,
                 dependency_manager=self._dependency_manager,
                 python_version=self._python_version,
+                github_output_mode=self._github_output_mode,
+                pypi_metadata=self._pypi_metadata,
+                license_=self.license_,
+                extras=self._extras,
             )
             py_project_toml.write()
 

@@ -1,7 +1,7 @@
 import { generateIntermediateRepresentation } from "@fern-api/ir-generator";
-import { runMockServer } from "@fern-api/mock";
+import { MockServer } from "@fern-api/mock";
 import { Project } from "@fern-api/project-loader";
-import { APIWorkspace, convertOpenApiWorkspaceToFernWorkspace, FernWorkspace } from "@fern-api/workspace-loader";
+import { APIWorkspace, FernWorkspace } from "@fern-api/workspace-loader";
 import { CliContext } from "../../cli-context/CliContext";
 import { API_CLI_OPTION } from "../../constants";
 import { validateAPIWorkspaceAndLogIssues } from "../validate/validateAPIWorkspaceAndLogIssues";
@@ -27,8 +27,7 @@ export async function mockServer({
     const workspace: APIWorkspace = project.apiWorkspaces[0];
 
     await cliContext.runTaskForWorkspace(workspace, async (context) => {
-        const fernWorkspace: FernWorkspace =
-            workspace.type === "fern" ? workspace : await convertOpenApiWorkspaceToFernWorkspace(workspace, context);
+        const fernWorkspace: FernWorkspace = await workspace.toFernWorkspace({ context });
 
         await validateAPIWorkspaceAndLogIssues({
             context,
@@ -40,14 +39,19 @@ export async function mockServer({
             workspace: fernWorkspace,
             audiences: { type: "all" },
             generationLanguage: undefined,
+            keywords: undefined,
             smartCasing: false,
-            disableExamples: false
+            disableExamples: false,
+            readme: undefined
         });
 
-        await runMockServer({
+        const mockServer = new MockServer({
             context,
             ir,
             port
         });
+
+        await mockServer.start();
+        await mockServer.keepAlive();
     });
 }

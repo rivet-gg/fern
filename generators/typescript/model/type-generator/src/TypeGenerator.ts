@@ -3,7 +3,7 @@ import {
     ExampleType,
     FernFilepath,
     ObjectTypeDeclaration,
-    PrimitiveType,
+    PrimitiveTypeV1,
     Type,
     TypeReference,
     UndiscriminatedUnionTypeDeclaration,
@@ -33,6 +33,7 @@ export declare namespace TypeGenerator {
         includeOtherInUnionTypes: boolean;
         includeSerdeLayer: boolean;
         noOptionalProperties: boolean;
+        retainOriginalCasing: boolean;
     }
 
     export namespace generateType {
@@ -44,6 +45,7 @@ export declare namespace TypeGenerator {
             fernFilepath: FernFilepath;
             getReferenceToSelf: (context: Context) => Reference;
             includeSerdeLayer: boolean;
+            retainOriginalCasing: boolean;
         }
     }
 }
@@ -54,19 +56,22 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
     private includeOtherInUnionTypes: boolean;
     private includeSerdeLayer: boolean;
     private noOptionalProperties: boolean;
+    private retainOriginalCasing: boolean;
 
     constructor({
         useBrandedStringAliases,
         includeUtilsOnUnionMembers,
         includeOtherInUnionTypes,
         includeSerdeLayer,
-        noOptionalProperties
+        noOptionalProperties,
+        retainOriginalCasing
     }: TypeGenerator.Init) {
         this.useBrandedStringAliases = useBrandedStringAliases;
         this.includeUtilsOnUnionMembers = includeUtilsOnUnionMembers;
         this.includeOtherInUnionTypes = includeOtherInUnionTypes;
         this.includeSerdeLayer = includeSerdeLayer;
         this.noOptionalProperties = noOptionalProperties;
+        this.retainOriginalCasing = retainOriginalCasing;
     }
 
     public generateType({
@@ -129,7 +134,8 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
             fernFilepath,
             getReferenceToSelf,
             includeSerdeLayer: this.includeSerdeLayer,
-            noOptionalProperties: this.noOptionalProperties
+            noOptionalProperties: this.noOptionalProperties,
+            retainOriginalCasing: this.retainOriginalCasing
         });
     }
 
@@ -158,7 +164,8 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
             includeUtilsOnUnionMembers: this.includeUtilsOnUnionMembers,
             includeOtherInUnionTypes: this.includeOtherInUnionTypes,
             includeSerdeLayer: this.includeSerdeLayer,
-            noOptionalProperties: this.noOptionalProperties
+            noOptionalProperties: this.noOptionalProperties,
+            retainOriginalCasing: this.retainOriginalCasing
         });
     }
 
@@ -185,7 +192,8 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
             fernFilepath,
             getReferenceToSelf,
             includeSerdeLayer: this.includeSerdeLayer,
-            noOptionalProperties: this.noOptionalProperties
+            noOptionalProperties: this.noOptionalProperties,
+            retainOriginalCasing: this.retainOriginalCasing
         });
     }
 
@@ -213,7 +221,8 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
             getReferenceToSelf,
             includeSerdeLayer: this.includeSerdeLayer,
             noOptionalProperties: this.noOptionalProperties,
-            includeEnumUtils: this.includeUtilsOnUnionMembers
+            includeEnumUtils: this.includeUtilsOnUnionMembers,
+            retainOriginalCasing: this.retainOriginalCasing
         });
     }
 
@@ -241,7 +250,8 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
                   fernFilepath,
                   getReferenceToSelf,
                   includeSerdeLayer: this.includeSerdeLayer,
-                  noOptionalProperties: this.noOptionalProperties
+                  noOptionalProperties: this.noOptionalProperties,
+                  retainOriginalCasing: this.retainOriginalCasing
               })
             : new GeneratedAliasTypeImpl({
                   typeName,
@@ -251,7 +261,8 @@ export class TypeGenerator<Context extends ModelContext = ModelContext> {
                   fernFilepath,
                   getReferenceToSelf,
                   includeSerdeLayer: this.includeSerdeLayer,
-                  noOptionalProperties: this.noOptionalProperties
+                  noOptionalProperties: this.noOptionalProperties,
+                  retainOriginalCasing: this.retainOriginalCasing
               });
     }
 }
@@ -260,9 +271,12 @@ function isTypeStringLike(type: TypeReference): boolean {
     if (type.type !== "primitive") {
         return false;
     }
-    return PrimitiveType._visit(type.primitive, {
+    return PrimitiveTypeV1._visit(type.primitive.v1, {
         integer: () => false,
         double: () => false,
+        uint: () => false,
+        uint64: () => false,
+        float: () => false,
         string: () => true,
         boolean: () => false,
         long: () => false,
@@ -270,6 +284,7 @@ function isTypeStringLike(type: TypeReference): boolean {
         uuid: () => true,
         date: () => true,
         base64: () => true,
+        bigInteger: () => true,
         _other: () => false
     });
 }

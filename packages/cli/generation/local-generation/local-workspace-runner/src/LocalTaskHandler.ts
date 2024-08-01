@@ -1,6 +1,6 @@
+import { FERNIGNORE_FILENAME } from "@fern-api/configuration";
 import { AbsoluteFilePath, doesPathExist, join, RelativeFilePath } from "@fern-api/fs-utils";
 import { loggingExeca } from "@fern-api/logging-execa";
-import { FERNIGNORE_FILENAME, SNIPPET_JSON_FILENAME } from "@fern-api/project-configuration";
 import { TaskContext } from "@fern-api/task-context";
 import decompress from "decompress";
 import { cp, readdir, readFile, rm, rmdir } from "fs/promises";
@@ -11,7 +11,10 @@ export declare namespace LocalTaskHandler {
         context: TaskContext;
         absolutePathToTmpOutputDirectory: AbsoluteFilePath;
         absolutePathToTmpSnippetJSON: AbsoluteFilePath | undefined;
+        absolutePathToLocalSnippetTemplateJSON: AbsoluteFilePath | undefined;
         absolutePathToLocalOutput: AbsoluteFilePath;
+        absolutePathToLocalSnippetJSON: AbsoluteFilePath | undefined;
+        absolutePathToTmpSnippetTemplatesJSON: AbsoluteFilePath | undefined;
     }
 }
 
@@ -19,18 +22,27 @@ export class LocalTaskHandler {
     private context: TaskContext;
     private absolutePathToTmpOutputDirectory: AbsoluteFilePath;
     private absolutePathToTmpSnippetJSON: AbsoluteFilePath | undefined;
+    private absolutePathToTmpSnippetTemplatesJSON: AbsoluteFilePath | undefined;
+    private absolutePathToLocalSnippetTemplateJSON: AbsoluteFilePath | undefined;
     private absolutePathToLocalOutput: AbsoluteFilePath;
+    private absolutePathToLocalSnippetJSON: AbsoluteFilePath | undefined;
 
     constructor({
         context,
         absolutePathToTmpOutputDirectory,
         absolutePathToTmpSnippetJSON,
-        absolutePathToLocalOutput
+        absolutePathToLocalSnippetTemplateJSON,
+        absolutePathToLocalOutput,
+        absolutePathToLocalSnippetJSON,
+        absolutePathToTmpSnippetTemplatesJSON
     }: LocalTaskHandler.Init) {
         this.context = context;
         this.absolutePathToLocalOutput = absolutePathToLocalOutput;
         this.absolutePathToTmpOutputDirectory = absolutePathToTmpOutputDirectory;
         this.absolutePathToTmpSnippetJSON = absolutePathToTmpSnippetJSON;
+        this.absolutePathToLocalSnippetJSON = absolutePathToLocalSnippetJSON;
+        this.absolutePathToLocalSnippetTemplateJSON = absolutePathToLocalSnippetTemplateJSON;
+        this.absolutePathToTmpSnippetTemplatesJSON = absolutePathToTmpSnippetTemplatesJSON;
     }
 
     public async copyGeneratedFiles(): Promise<void> {
@@ -39,8 +51,26 @@ export class LocalTaskHandler {
         } else {
             await this.copyGeneratedFilesNoFernIgnore();
         }
-        if (this.absolutePathToTmpSnippetJSON !== undefined) {
-            await this.copySnippetJSON(this.absolutePathToTmpSnippetJSON);
+        if (
+            this.absolutePathToTmpSnippetJSON != null &&
+            this.absolutePathToLocalSnippetJSON != null &&
+            (await doesPathExist(this.absolutePathToTmpSnippetJSON))
+        ) {
+            await this.copySnippetJSON({
+                absolutePathToTmpSnippetJSON: this.absolutePathToTmpSnippetJSON,
+                absolutePathToLocalSnippetJSON: this.absolutePathToLocalSnippetJSON
+            });
+        }
+
+        if (
+            this.absolutePathToTmpSnippetTemplatesJSON != null &&
+            this.absolutePathToLocalSnippetTemplateJSON != null &&
+            (await doesPathExist(this.absolutePathToTmpSnippetTemplatesJSON))
+        ) {
+            await this.copySnippetJSON({
+                absolutePathToTmpSnippetJSON: this.absolutePathToTmpSnippetTemplatesJSON,
+                absolutePathToLocalSnippetJSON: this.absolutePathToLocalSnippetTemplateJSON
+            });
         }
     }
 
@@ -108,21 +138,32 @@ export class LocalTaskHandler {
             return;
         }
         this.context.logger.debug(`Copying generated files to ${outputPath}`);
-        if (firstLocalOutputItem.endsWith(".zip") && remaininglocalOutputItems.length === 0) {
+        if (firstLocalOutputItem.endsWith(".zip")) {
             await decompress(
                 join(this.absolutePathToTmpOutputDirectory, RelativeFilePath.of(firstLocalOutputItem)),
                 outputPath
             );
+            for (const localOutputItem of remaininglocalOutputItems) {
+                await cp(
+                    join(this.absolutePathToTmpOutputDirectory, RelativeFilePath.of(localOutputItem)),
+                    join(outputPath, RelativeFilePath.of(localOutputItem)),
+                    { recursive: true }
+                );
+            }
         } else {
             await cp(this.absolutePathToTmpOutputDirectory, outputPath, { recursive: true });
         }
     }
 
-    private async copySnippetJSON(absolutePathToTmpSnippetJSON: string): Promise<void> {
-        const absolutePathToSnippet = AbsoluteFilePath.of(
-            join(this.absolutePathToLocalOutput, RelativeFilePath.of(SNIPPET_JSON_FILENAME))
-        );
-        await cp(AbsoluteFilePath.of(absolutePathToTmpSnippetJSON), absolutePathToSnippet);
+    private async copySnippetJSON({
+        absolutePathToTmpSnippetJSON,
+        absolutePathToLocalSnippetJSON
+    }: {
+        absolutePathToTmpSnippetJSON: AbsoluteFilePath;
+        absolutePathToLocalSnippetJSON: AbsoluteFilePath;
+    }): Promise<void> {
+        this.context.logger.debug(`Copying generated snippets to ${absolutePathToLocalSnippetJSON}`);
+        await cp(absolutePathToTmpSnippetJSON, absolutePathToLocalSnippetJSON);
     }
 
     private async runGitCommand(options: string[], cwd: AbsoluteFilePath): Promise<string> {

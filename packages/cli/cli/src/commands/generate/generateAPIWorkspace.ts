@@ -1,26 +1,35 @@
 import { FernToken } from "@fern-api/auth";
-import { DEFAULT_GROUP_GENERATORS_CONFIG_KEY } from "@fern-api/generators-configuration";
+import {
+    DEFAULT_GROUP_GENERATORS_CONFIG_KEY,
+    fernConfigJson,
+    GENERATORS_CONFIGURATION_FILENAME
+} from "@fern-api/configuration";
+import { AbsoluteFilePath } from "@fern-api/fs-utils";
 import { runLocalGenerationForWorkspace } from "@fern-api/local-workspace-runner";
-import { GENERATORS_CONFIGURATION_FILENAME } from "@fern-api/project-configuration";
 import { runRemoteGenerationForAPIWorkspace } from "@fern-api/remote-workspace-runner";
 import { TaskContext } from "@fern-api/task-context";
-import { FernWorkspace } from "@fern-api/workspace-loader";
+import { APIWorkspace } from "@fern-api/workspace-loader";
 import { GROUP_CLI_OPTION } from "../../constants";
 import { validateAPIWorkspaceAndLogIssues } from "../validate/validateAPIWorkspaceAndLogIssues";
+import { GenerationMode } from "./generateAPIWorkspaces";
 
 export async function generateWorkspace({
-    workspace,
     organization,
+    workspace,
+    projectConfig,
     context,
     groupName,
     version,
     shouldLogS3Url,
     token,
     useLocalDocker,
-    keepDocker
+    keepDocker,
+    absolutePathToPreview,
+    mode
 }: {
-    workspace: FernWorkspace;
     organization: string;
+    workspace: APIWorkspace;
+    projectConfig: fernConfigJson.ProjectConfig;
     context: TaskContext;
     version: string | undefined;
     groupName: string | undefined;
@@ -28,6 +37,8 @@ export async function generateWorkspace({
     token?: FernToken;
     useLocalDocker: boolean;
     keepDocker: boolean;
+    absolutePathToPreview: AbsoluteFilePath | undefined;
+    mode: GenerationMode | undefined;
 }): Promise<void> {
     if (workspace.generatorsConfiguration == null) {
         context.logger.warn("This workspaces has no generators.yml");
@@ -53,11 +64,15 @@ export async function generateWorkspace({
         return context.failAndThrow(`Group '${groupNameOrDefault}' does not exist.`);
     }
 
-    await validateAPIWorkspaceAndLogIssues({ workspace, context, logWarnings: false });
+    await validateAPIWorkspaceAndLogIssues({
+        workspace: await workspace.toFernWorkspace({ context }),
+        context,
+        logWarnings: false
+    });
 
     if (useLocalDocker) {
         await runLocalGenerationForWorkspace({
-            organization,
+            projectConfig,
             workspace,
             generatorGroup: group,
             keepDocker,
@@ -68,14 +83,17 @@ export async function generateWorkspace({
             return context.failAndThrow("Must provide token if 'useLocalDocker' is false");
         }
         await runRemoteGenerationForAPIWorkspace({
-            workspace,
+            projectConfig,
             organization,
+            workspace,
             context,
             generatorGroup: group,
             version,
             shouldLogS3Url,
             token,
-            whitelabel: workspace.generatorsConfiguration.whitelabel
+            whitelabel: workspace.generatorsConfiguration.whitelabel,
+            absolutePathToPreview,
+            mode
         });
     }
 }

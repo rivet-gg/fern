@@ -10,6 +10,7 @@ import com.fern.ir.model.ir.ErrorDiscriminationByPropertyStrategy;
 import com.fern.ir.model.ir.IntermediateRepresentation;
 import com.fern.java.AbstractGeneratorCli;
 import com.fern.java.DefaultGeneratorExecClient;
+import com.fern.java.FeatureResolver;
 import com.fern.java.generators.AuthGenerator;
 import com.fern.java.generators.DateTimeDeserializerGenerator;
 import com.fern.java.generators.ObjectMappersGenerator;
@@ -32,8 +33,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class Cli
-        extends AbstractGeneratorCli<SpringCustomConfig, SpringDownloadFilesCustomConfig> {
+public final class Cli extends AbstractGeneratorCli<SpringCustomConfig, SpringDownloadFilesCustomConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(Cli.class);
 
@@ -51,7 +51,8 @@ public final class Cli
                 SpringCustomConfig.builder()
                         .wrappedAliases(customConfig.wrappedAliases())
                         .build(),
-                customConfig);
+                customConfig,
+                new FeatureResolver(ir, generatorConfig, generatorExecClient).getResolvedAuthSchemes());
         generateClient(context, ir);
     }
 

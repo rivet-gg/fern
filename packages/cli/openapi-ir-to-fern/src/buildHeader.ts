@@ -1,9 +1,10 @@
 import { RelativeFilePath } from "@fern-api/fs-utils";
+import { Header } from "@fern-api/openapi-ir-sdk";
 import { RawSchemas } from "@fern-api/yaml-schema";
-import { Header } from "@fern-fern/openapi-ir-model/finalIr";
 import { camelCase } from "lodash-es";
 import { buildTypeReference } from "./buildTypeReference";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { convertAvailability } from "./utils/convertAvailability";
 import { getTypeFromTypeReference } from "./utils/getTypeFromTypeReference";
 
 export function buildHeader({
@@ -24,7 +25,12 @@ export function buildHeader({
     const headerWithoutXPrefix = header.name.replace(/^x-|^X-/, "");
     const headerVariableName =
         header.parameterNameOverride != null ? header.parameterNameOverride : camelCase(headerWithoutXPrefix);
-    if (header.description == null && header.name === headerVariableName) {
+    if (
+        header.description == null &&
+        header.name === headerVariableName &&
+        header.env == null &&
+        header.availability == null
+    ) {
         return headerType;
     }
     const headerSchema: RawSchemas.HttpHeaderSchema = {
@@ -36,5 +42,12 @@ export function buildHeader({
     if (header.description != null) {
         headerSchema.docs = header.description;
     }
+    if (header.env != null) {
+        headerSchema.env = header.env;
+    }
+    if (header.availability != null) {
+        headerSchema.availability = convertAvailability(header.availability);
+    }
+
     return headerSchema;
 }

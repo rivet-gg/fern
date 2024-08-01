@@ -1,5 +1,5 @@
 import { AbsoluteFilePath } from "@fern-api/fs-utils";
-import { FernGeneratorExec } from "@fern-fern/generator-exec-sdk";
+import { FernGeneratorExec } from "@fern-api/generator-commons";
 import { IntermediateRepresentation } from "@fern-fern/ir-sdk/api";
 import { AbstractGeneratorCli } from "@fern-typescript/abstract-generator-cli";
 import { JavaScriptRuntime, NpmPackage, PersistedTypescriptProject } from "@fern-typescript/commons";
@@ -46,7 +46,18 @@ export class SdkGeneratorCli extends AbstractGeneratorCli<SdkCustomConfig> {
             treatUnknownAsAny: parsed?.treatUnknownAsAny ?? false,
             includeContentHeadersOnFileDownloadResponse: parsed?.includeContentHeadersOnFileDownloadResponse ?? false,
             noSerdeLayer,
-            noOptionalProperties: parsed?.noOptionalProperties ?? false
+            extraPeerDependencies: parsed?.extraPeerDependencies ?? {},
+            extraPeerDependenciesMeta: parsed?.extraPeerDependenciesMeta ?? {},
+            noOptionalProperties: parsed?.noOptionalProperties ?? false,
+            includeApiReference: parsed?.includeApiReference ?? false,
+            tolerateRepublish: parsed?.tolerateRepublish ?? false,
+            retainOriginalCasing: parsed?.retainOriginalCasing ?? false,
+            allowExtraFields: parsed?.allowExtraFields ?? false,
+            inlineFileProperties: parsed?.inlineFileProperties ?? false,
+            packageJson: parsed?.packageJson,
+            publishToJsr: parsed?.publishToJsr ?? false,
+            omitUndefined: parsed?.omitUndefined ?? false,
+            generateWireTests: parsed?.generateWireTests ?? false
         };
     }
 
@@ -67,17 +78,31 @@ export class SdkGeneratorCli extends AbstractGeneratorCli<SdkCustomConfig> {
             customConfig.namespaceExport ??
             `${upperFirst(camelCase(config.organization))}${upperFirst(camelCase(config.workspaceName))}`;
 
+        const maybeGithubOutputMode = config.output.mode.type === "github" ? config.output.mode : undefined;
+
         const sdkGenerator = new SdkGenerator({
             namespaceExport,
             intermediateRepresentation,
             context: generatorContext,
             npmPackage,
             generateJestTests: config.output.mode.type === "github",
+            rawConfig: config,
             config: {
+                organization: config.organization,
+                apiName: intermediateRepresentation.apiName.originalName,
                 whitelabel: config.whitelabel,
+                generateOAuthClients: config.generateOauthClients,
+                originalReadmeFilepath:
+                    config.originalReadmeFilepath != null
+                        ? AbsoluteFilePath.of(config.originalReadmeFilepath)
+                        : undefined,
                 snippetFilepath:
                     config.output.snippetFilepath != null
                         ? AbsoluteFilePath.of(config.output.snippetFilepath)
+                        : undefined,
+                snippetTemplateFilepath:
+                    config.output.snippetTemplateFilepath != null
+                        ? AbsoluteFilePath.of(config.output.snippetTemplateFilepath)
                         : undefined,
                 shouldUseBrandedStringAliases: customConfig.useBrandedStringAliases,
                 isPackagePrivate: customConfig.isPackagePrivate,
@@ -94,16 +119,30 @@ export class SdkGeneratorCli extends AbstractGeneratorCli<SdkCustomConfig> {
                 targetRuntime: this.targetRuntime,
                 extraDevDependencies: customConfig.extraDevDependencies,
                 extraDependencies: customConfig.extraDependencies,
+                extraPeerDependencies: customConfig.extraPeerDependencies ?? {},
+                extraPeerDependenciesMeta: customConfig.extraPeerDependenciesMeta ?? {},
                 treatUnknownAsAny: customConfig.treatUnknownAsAny,
                 includeContentHeadersOnFileDownloadResponse: customConfig.includeContentHeadersOnFileDownloadResponse,
                 includeSerdeLayer: !customConfig.noSerdeLayer,
-                noOptionalProperties: customConfig.noOptionalProperties
+                retainOriginalCasing: customConfig.retainOriginalCasing ?? false,
+                noOptionalProperties: customConfig.noOptionalProperties,
+                tolerateRepublish: customConfig.tolerateRepublish,
+                allowExtraFields: customConfig.allowExtraFields ?? false,
+                inlineFileProperties: customConfig.inlineFileProperties ?? false,
+                writeUnitTests: customConfig.generateWireTests ?? config.writeUnitTests,
+                executionEnvironment: this.exectuionEnvironment(config),
+                packageJson: customConfig.packageJson,
+                githubRepoUrl: maybeGithubOutputMode?.repoUrl,
+                githubInstallationToken: maybeGithubOutputMode?.installationToken,
+                outputJsr: customConfig.publishToJsr ?? false,
+                omitUndefined: customConfig.omitUndefined ?? false
             }
         });
         const typescriptProject = await sdkGenerator.generate();
         const persistedTypescriptProject = await typescriptProject.persist();
         await sdkGenerator.copyCoreUtilities({
-            pathToSrc: persistedTypescriptProject.getSrcDirectory()
+            pathToSrc: persistedTypescriptProject.getSrcDirectory(),
+            pathToRoot: persistedTypescriptProject.getRootDirectory()
         });
 
         return persistedTypescriptProject;
@@ -115,5 +154,21 @@ export class SdkGeneratorCli extends AbstractGeneratorCli<SdkCustomConfig> {
 
     protected outputSourceFiles(customConfig: SdkCustomConfig): boolean {
         return customConfig.outputSourceFiles;
+    }
+
+    protected shouldTolerateRepublish(customConfig: SdkCustomConfig): boolean {
+        return customConfig.tolerateRepublish;
+    }
+
+    protected publishToJsr(customConfig: SdkCustomConfig): boolean {
+        return customConfig.publishToJsr ?? false;
+    }
+
+    protected exectuionEnvironment(config: FernGeneratorExec.GeneratorConfig): "local" | "dev" | "prod" {
+        return config.environment.type === "local"
+            ? "local"
+            : config.environment.coordinatorUrlV2.endsWith("dev2.buildwithfern.com")
+            ? "dev"
+            : "prod";
     }
 }

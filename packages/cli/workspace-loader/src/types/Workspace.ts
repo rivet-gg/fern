@@ -1,30 +1,39 @@
-import { DependenciesConfiguration } from "@fern-api/dependencies-configuration";
+import { docsYml, generatorsYml } from "@fern-api/configuration";
 import { AbsoluteFilePath, RelativeFilePath } from "@fern-api/fs-utils";
-import { GeneratorsConfiguration } from "@fern-api/generators-configuration";
 import { DefinitionFileSchema, PackageMarkerFileSchema, RootApiFileSchema } from "@fern-api/yaml-schema";
-import { DocsConfiguration } from "@fern-fern/docs-config/api";
+import { processPackageMarkers } from "../processPackageMarkers";
+import { FernWorkspace, LazyFernWorkspace } from "../workspaces/FernWorkspace";
+import { OSSWorkspace } from "../workspaces/OSSWorkspace";
 import { ParsedFernFile } from "./FernFile";
 
-export type Workspace = DocsWorkspace | APIWorkspace;
+export type Workspace = DocsWorkspace | LazyFernWorkspace | OSSWorkspace;
 
 export interface DocsWorkspace {
     type: "docs";
     workspaceName: string | undefined;
-    absoluteFilepath: AbsoluteFilePath;
+    absoluteFilepath: AbsoluteFilePath; // path to the fern folder (dirname(absoluteFilepathToDocsConfig))
     absoluteFilepathToDocsConfig: AbsoluteFilePath;
-    config: DocsConfiguration;
+    config: docsYml.RawSchemas.DocsConfiguration;
 }
 
-export type APIWorkspace = FernWorkspace | OpenAPIWorkspace;
-
-export interface OpenAPIWorkspace {
-    type: "openapi";
-    workspaceName: string | undefined;
-    name: string;
+export interface Spec {
     absoluteFilepath: AbsoluteFilePath;
-    generatorsConfiguration: GeneratorsConfiguration | undefined;
-    absolutePathToOpenAPI: AbsoluteFilePath;
-    absolutePathToAsyncAPI: AbsoluteFilePath | undefined;
+    absoluteFilepathToOverrides: AbsoluteFilePath | undefined;
+    settings?: SpecImportSettings;
+}
+
+export interface SpecImportSettings {
+    audiences: string[];
+    shouldUseTitleAsName: boolean;
+    shouldUseUndiscriminatedUnionsWithLiterals: boolean;
+}
+export interface APIChangelog {
+    files: ChangelogFile[];
+}
+
+export interface ChangelogFile {
+    absoluteFilepath: AbsoluteFilePath;
+    contents: string;
 }
 
 export interface OpenAPIFile {
@@ -37,24 +46,20 @@ export interface AsyncAPIFile {
     contents: string;
 }
 
-export interface FernWorkspace {
-    type: "fern";
-    name: string;
-    workspaceName: string | undefined;
-    absoluteFilepath: AbsoluteFilePath;
-    generatorsConfiguration: GeneratorsConfiguration | undefined;
-    dependenciesConfiguration: DependenciesConfiguration;
-    definition: FernDefinition;
-}
-
 export interface FernDefinition {
     absoluteFilepath: AbsoluteFilePath;
     rootApiFile: ParsedFernFile<RootApiFileSchema>;
     namedDefinitionFiles: Record<RelativeFilePath, OnDiskNamedDefinitionFile>;
     packageMarkers: Record<RelativeFilePath, ParsedFernFile<PackageMarkerFileSchema>>;
-    importedDefinitions: Record<RelativeFilePath, FernDefinition>;
+    importedDefinitions: Record<RelativeFilePath, processPackageMarkers.ImportedDefinition>;
 }
 
 export interface OnDiskNamedDefinitionFile extends ParsedFernFile<DefinitionFileSchema> {
     absoluteFilepath: AbsoluteFilePath;
+}
+
+export interface FernWorkspaceMetadata {
+    workspace: FernWorkspace;
+    absolutePathToPreview: AbsoluteFilePath | undefined;
+    group: generatorsYml.GeneratorGroup;
 }

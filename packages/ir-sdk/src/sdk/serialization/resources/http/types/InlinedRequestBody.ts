@@ -17,7 +17,11 @@ export const InlinedRequestBody: core.serialization.ObjectSchema<
     properties: core.serialization.list(
         core.serialization.lazyObject(async () => (await import("../../..")).InlinedRequestBodyProperty)
     ),
+    extendedProperties: core.serialization
+        .list(core.serialization.lazyObject(async () => (await import("../../..")).ObjectProperty))
+        .optional(),
     contentType: core.serialization.string().optional(),
+    extraProperties: core.serialization.property("extra-properties", core.serialization.boolean()),
 });
 
 export declare namespace InlinedRequestBody {
@@ -25,6 +29,8 @@ export declare namespace InlinedRequestBody {
         name: serializers.Name.Raw;
         extends: serializers.DeclaredTypeName.Raw[];
         properties: serializers.InlinedRequestBodyProperty.Raw[];
+        extendedProperties?: serializers.ObjectProperty.Raw[] | null;
         contentType?: string | null;
+        "extra-properties": boolean;
     }
 }

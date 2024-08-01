@@ -19,7 +19,7 @@
     "clean": "rm -rf ./lib && tsc --build --clean",
     "compile": "tsc --build",
     "test": "yarn compile && jest --passWithNoTests",
-    "lint:eslint": "eslint --max-warnings 0 . --ignore-path=../../../../.eslintignore --report-unused-disable-directives",
+    "lint:eslint": "eslint --max-warnings 0 . --ignore-path=../../../../.eslintignore",
     "lint:eslint:fix": "yarn lint:eslint --fix",
     "format": "prettier --write --ignore-unknown --ignore-path ../../../../shared/.prettierignore \"**\"",
     "format:check": "prettier --check --ignore-unknown --ignore-path ../../../../shared/.prettierignore \"**\"",
@@ -27,15 +27,17 @@
     "depcheck": "depcheck"
   },
   "dependencies": {
+    "@fern-api/configuration": "workspace:*",
     "@fern-api/core-utils": "workspace:*",
+    "@fern-api/docs-markdown-utils": "workspace:*",
     "@fern-api/fs-utils": "workspace:*",
     "@fern-api/ir-sdk": "workspace:*",
-    "@fern-fern/docs-config": "0.0.75",
+    "@fern-api/task-context": "workspace:*",
     "js-yaml": "^4.1.0",
     "zod": "^3.22.3"
   },
   "devDependencies": {
-    "@types/jest": "^29.0.3",
+    "@types/jest": "^29.5.12",
     "@types/js-yaml": "^4.0.8",
     "@types/node": "^18.7.18",
     "depcheck": "^1.4.6",

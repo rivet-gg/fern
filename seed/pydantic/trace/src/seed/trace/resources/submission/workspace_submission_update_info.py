@@ -4,53 +4,82 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .error_info import ErrorInfo
+from .exception_info import ExceptionInfo
+from .exception_v_2 import ExceptionV2
 from .running_submission_state import RunningSubmissionState
-from .workspace_run_details import WorkspaceRunDetails
-from .workspace_traced_update import WorkspaceTracedUpdate
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 
-class WorkspaceSubmissionUpdateInfo_Running(pydantic.BaseModel):
-    type: typing_extensions.Literal["running"]
+class WorkspaceSubmissionUpdateInfo_Running(UniversalBaseModel):
     value: RunningSubmissionState
+    type: typing.Literal["running"] = "running"
 
 
-class WorkspaceSubmissionUpdateInfo_Ran(WorkspaceRunDetails):
-    type: typing_extensions.Literal["ran"]
+class WorkspaceSubmissionUpdateInfo_Ran(UniversalBaseModel):
+    type: typing.Literal["ran"] = "ran"
+    exception_v_2: typing.Optional[ExceptionV2] = pydantic.Field(alias="exceptionV2", default=None)
+    exception: typing.Optional[ExceptionInfo] = None
+    stdout: str
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
 
-
-class WorkspaceSubmissionUpdateInfo_Stopped(pydantic.BaseModel):
-    type: typing_extensions.Literal["stopped"]
-
-
-class WorkspaceSubmissionUpdateInfo_Traced(pydantic.BaseModel):
-    type: typing_extensions.Literal["traced"]
-
-
-class WorkspaceSubmissionUpdateInfo_TracedV2(WorkspaceTracedUpdate):
-    type: typing_extensions.Literal["tracedV2"]
-
-    class Config:
-        allow_population_by_field_name = True
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class WorkspaceSubmissionUpdateInfo_Errored(pydantic.BaseModel):
-    type: typing_extensions.Literal["errored"]
+class WorkspaceSubmissionUpdateInfo_Stopped(UniversalBaseModel):
+    type: typing.Literal["stopped"] = "stopped"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class WorkspaceSubmissionUpdateInfo_Traced(UniversalBaseModel):
+    type: typing.Literal["traced"] = "traced"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class WorkspaceSubmissionUpdateInfo_TracedV2(UniversalBaseModel):
+    type: typing.Literal["tracedV2"] = "tracedV2"
+    trace_responses_size: int = pydantic.Field(alias="traceResponsesSize")
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class WorkspaceSubmissionUpdateInfo_Errored(UniversalBaseModel):
     value: ErrorInfo
+    type: typing.Literal["errored"] = "errored"
 
 
-class WorkspaceSubmissionUpdateInfo_Finished(pydantic.BaseModel):
-    type: typing_extensions.Literal["finished"]
+class WorkspaceSubmissionUpdateInfo_Finished(UniversalBaseModel):
+    type: typing.Literal["finished"] = "finished"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 WorkspaceSubmissionUpdateInfo = typing.Union[

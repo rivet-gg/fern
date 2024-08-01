@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
-from ....core.datetime_utils import serialize_datetime
+import pydantic
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, update_forward_refs
 
 
-class Node(pydantic.BaseModel):
+class Node(UniversalBaseModel):
     """
-    from seed.examples import Node, Tree
+    Examples
+    --------
+    from seed.examples.resources.types import Node, Tree
 
     Node(
         name="root",
@@ -43,22 +41,17 @@ class Node(pydantic.BaseModel):
     """
 
     name: str
-    nodes: typing.Optional[typing.List["Node"]]
-    trees: typing.Optional[typing.List["Tree"]]
+    nodes: typing.Optional[typing.List[Node]] = None
+    trees: typing.Optional[typing.List[Tree]] = None
 
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="forbid")  # type: ignore # Pydantic v2
+    else:
 
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        class Config:
+            extra = pydantic.Extra.forbid
 
 
 from .tree import Tree  # noqa: E402
 
-Node.update_forward_refs(Node=Node, Tree=Tree)
+update_forward_refs(Node)

@@ -4,27 +4,40 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as SeedTrace from "../../..";
+import * as SeedTrace from "../../../index";
 import urlJoin from "url-join";
-import * as serializers from "../../../../serialization";
-import * as errors from "../../../../errors";
+import * as serializers from "../../../../serialization/index";
+import * as errors from "../../../../errors/index";
 
 export declare namespace Homepage {
     interface Options {
         environment?: core.Supplier<environments.SeedTraceEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
+        /** Override the X-Random-Header header */
         xRandomHeader?: core.Supplier<string | undefined>;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
+        /** Override the X-Random-Header header */
+        xRandomHeader?: string | undefined;
     }
 }
 
 export class Homepage {
     constructor(protected readonly _options: Homepage.Options = {}) {}
 
+    /**
+     * @param {Homepage.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.homepage.getHomepageProblems()
+     */
     public async getHomepageProblems(requestOptions?: Homepage.RequestOptions): Promise<SeedTrace.ProblemId[]> {
         const _response = await core.fetcher({
             url: urlJoin(
@@ -39,15 +52,19 @@ export class Homepage {
                         ? await core.Supplier.get(this._options.xRandomHeader)
                         : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return await serializers.homepage.getHomepageProblems.Response.parseOrThrow(_response.body, {
+            return serializers.homepage.getHomepageProblems.Response.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -77,6 +94,13 @@ export class Homepage {
         }
     }
 
+    /**
+     * @param {SeedTrace.ProblemId[]} request
+     * @param {Homepage.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.homepage.setHomepageProblems(["string"])
+     */
     public async setHomepageProblems(
         request: SeedTrace.ProblemId[],
         requestOptions?: Homepage.RequestOptions
@@ -94,15 +118,19 @@ export class Homepage {
                         ? await core.Supplier.get(this._options.xRandomHeader)
                         : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.homepage.setHomepageProblems.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.homepage.setHomepageProblems.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -130,7 +158,7 @@ export class Homepage {
         }
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

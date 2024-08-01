@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
+
+from fern_python.codegen.ast.nodes.expressions.function_invocation.function_invocation import (
+    FunctionInvocation,
+)
 
 from ...ast_node import AstNode, AstNodeMetadata, GenericTypeVar, NodeWriter
 from ...references import ClassReference, Module, Reference, ReferenceImport
 from ..expressions import Expression
 from .type_parameter import TypeParameter
+
+TYPING_REFERENCE_IMPORT = ReferenceImport(
+    module=Module.built_in(("typing",)),
+)
 
 
 class TypeHint(AstNode):
@@ -16,7 +24,6 @@ class TypeHint(AstNode):
         arguments: Sequence[Expression] = None,
         is_optional: bool = False,
         is_literal: bool = False,
-        is_string_reference: bool = False,
     ):
         self._type = type
         self._type_parameters = type_parameters or []
@@ -24,7 +31,6 @@ class TypeHint(AstNode):
 
         self.is_optional = is_optional
         self.is_literal = is_literal
-        self.is_string_reference = is_string_reference
 
     @staticmethod
     def str_() -> TypeHint:
@@ -55,6 +61,14 @@ class TypeHint(AstNode):
         return TypeHint(type=get_reference_to_built_in_primitive("float"))
 
     @staticmethod
+    def bytes_or_bytes_stream() -> TypeHint:
+        return TypeHint.union(
+            TypeHint.bytes(),
+            TypeHint.iterator(TypeHint.bytes()),
+            TypeHint.async_iterator(TypeHint.bytes()),
+        )
+
+    @staticmethod
     def bytes() -> TypeHint:
         return TypeHint(type=get_reference_to_built_in_primitive("bytes"))
 
@@ -68,6 +82,17 @@ class TypeHint(AstNode):
             type=get_reference_to_typing_extensions_import("NotRequired"),
             type_parameters=[TypeParameter(wrapped_type)],
         )
+
+    @staticmethod
+    def tuple_(*subtypes: TypeHint) -> TypeHint:
+        return TypeHint(
+            type=get_reference_to_typing_import("Tuple"),
+            type_parameters=[TypeParameter(subtype) for subtype in subtypes],
+        )
+
+    @staticmethod
+    def any_str() -> TypeHint:
+        return TypeHint(type=get_reference_to_typing_import("AnyStr"))
 
     @staticmethod
     def optional(wrapped_type: TypeHint) -> TypeHint:
@@ -127,12 +152,16 @@ class TypeHint(AstNode):
         )
 
     @staticmethod
-    def any() -> TypeHint:
-        return TypeHint(type=get_reference_to_typing_import("Any"))
+    def type_checking() -> TypeHint:
+        return TypeHint(type=get_reference_to_typing_import("TYPE_CHECKING"))
 
     @staticmethod
-    def IO() -> TypeHint:
-        return TypeHint(type=get_reference_to_typing_import("IO"))
+    def type_checking_reference() -> Reference:
+        return get_reference_to_typing_import("TYPE_CHECKING")
+
+    @staticmethod
+    def any() -> TypeHint:
+        return TypeHint(type=get_reference_to_typing_import("Any"))
 
     @staticmethod
     def generic(generic: GenericTypeVar) -> TypeHint:
@@ -143,6 +172,15 @@ class TypeHint(AstNode):
         return TypeHint(
             type=get_reference_to_typing_import("cast"),
             arguments=[Expression(type_casted_to), value_being_casted],
+        )
+
+    @staticmethod
+    def invoke_cast(type_casted_to: TypeHint, value_being_casted: Expression) -> Expression:
+        return Expression(
+            FunctionInvocation(
+                function_definition=get_reference_to_typing_import("cast"),
+                args=[Expression(type_casted_to), value_being_casted],
+            )
         )
 
     @staticmethod
@@ -158,19 +196,14 @@ class TypeHint(AstNode):
     @staticmethod
     def annotated(type: TypeHint, annotation: Expression) -> TypeHint:
         return TypeHint(
-            type=ClassReference(
-                import_=ReferenceImport(
-                    module=Module.built_in(("typing_extensions",)),
-                ),
-                qualified_name_excluding_import=("Annotated",),
-            ),
+            type=get_reference_to_typing_extensions_import("Annotated"),
             type_parameters=[TypeParameter(type), TypeParameter(annotation)],
         )
 
     @staticmethod
     def literal(value: Expression) -> TypeHint:
         return TypeHint(
-            type=get_reference_to_typing_extensions_import("Literal"),
+            type=get_reference_to_typing_import("Literal"),
             type_parameters=[TypeParameter(value)],
             is_literal=True,
         )
@@ -192,14 +225,11 @@ class TypeHint(AstNode):
             metadata.update(type_parameter.get_metadata())
         return metadata
 
-    def write(self, writer: NodeWriter) -> None:
+    def write(self, writer: NodeWriter, should_write_as_snippet: Optional[bool] = None) -> None:
         if isinstance(self._type, GenericTypeVar):
-            if self.is_string_reference:
-                writer.write(f'"{self._type.name}"')
-            else:
-                writer.write(self._type.name)
+            writer.write(self._type.name)
         else:
-            writer.write_reference(self._type, is_string_reference=self.is_string_reference)
+            writer.write_reference(self._type)
 
         if len(self._type_parameters) > 0:
             writer.write("[")
@@ -222,18 +252,17 @@ class TypeHint(AstNode):
             writer.write(")")
 
 
-def get_reference_to_typing_extensions_import(name: str) -> ClassReference:
+def get_reference_to_typing_extensions_import(name: str, require_postponed_annotations: bool = False) -> ClassReference:
     return ClassReference(
         import_=ReferenceImport(module=Module.built_in(("typing_extensions",))),
         qualified_name_excluding_import=(name,),
+        require_postponed_annotations=require_postponed_annotations,
     )
 
 
 def get_reference_to_typing_import(name: str) -> ClassReference:
     return ClassReference(
-        import_=ReferenceImport(
-            module=Module.built_in(("typing",)),
-        ),
+        import_=TYPING_REFERENCE_IMPORT,
         qualified_name_excluding_import=(name,),
     )
 

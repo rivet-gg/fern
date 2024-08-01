@@ -4,25 +4,19 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
-
+from ...core.pydantic_utilities import UniversalBaseModel
 from ..commons.problem_id import ProblemId
 from .create_problem_error import CreateProblemError
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
-
-class CreateProblemResponse_Success(pydantic.BaseModel):
-    type: typing_extensions.Literal["success"]
+class CreateProblemResponse_Success(UniversalBaseModel):
     value: ProblemId
+    type: typing.Literal["success"] = "success"
 
 
-class CreateProblemResponse_Error(pydantic.BaseModel):
-    type: typing_extensions.Literal["error"]
+class CreateProblemResponse_Error(UniversalBaseModel):
     value: CreateProblemError
+    type: typing.Literal["error"] = "error"
 
 
 CreateProblemResponse = typing.Union[CreateProblemResponse_Success, CreateProblemResponse_Error]

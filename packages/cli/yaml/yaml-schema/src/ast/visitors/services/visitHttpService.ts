@@ -3,6 +3,7 @@ import { RawSchemas, RootApiFileAstVisitor } from "../../..";
 import { NodePath } from "../../../NodePath";
 import { HttpEndpointSchema, HttpHeaderSchema, HttpPathParameterSchema, HttpServiceSchema } from "../../../schemas";
 import { isInlineRequestBody } from "../../../utils/isInlineRequestBody";
+import { visitExampleResponseSchema } from "../../../utils/visitExampleResponseSchema";
 import { isVariablePathParameter } from "../../../utils/visitRawPathParameter";
 import { DefinitionFileAstVisitor, TypeReferenceLocation } from "../../DefinitionFileAstVisitor";
 import { createDocsVisitor } from "../utils/createDocsVisitor";
@@ -121,10 +122,15 @@ async function visitEndpoint({
                                 docs: createDocsVisitor(visitor, nodePathForQueryParameter),
                                 availability: noop,
                                 type: async (type) => {
-                                    await visitTypeReference(type, [...nodePathForQueryParameter, "type"]);
+                                    await visitTypeReference(type, [...nodePathForQueryParameter, "type"], {
+                                        _default: queryParameter.default,
+                                        validation: queryParameter.validation
+                                    });
                                 },
                                 "allow-multiple": noop,
-                                audiences: noop
+                                audiences: noop,
+                                default: noop,
+                                validation: noop
                             });
                         }
                     }
@@ -182,14 +188,19 @@ async function visitEndpoint({
                                             availability: noop,
                                             type: async (type) => {
                                                 await visitTypeReference(type, [...nodePathForProperty, "type"], {
-                                                    location: TypeReferenceLocation.InlinedRequestProperty
+                                                    location: TypeReferenceLocation.InlinedRequestProperty,
+                                                    _default: property.default,
+                                                    validation: property.validation
                                                 });
                                             },
-                                            audiences: noop
+                                            audiences: noop,
+                                            default: noop,
+                                            validation: noop
                                         });
                                     }
                                 }
-                            }
+                            },
+                            ["extra-properties"]: noop
                         });
                     } else {
                         await createDocsVisitor(visitor, nodePathForRequestBody)(body.docs);
@@ -201,6 +212,12 @@ async function visitEndpoint({
         audiences: noop,
         method: noop,
         auth: noop,
+        "stream-condition": async (streamCondition) => {
+            await visitor.streamCondition?.({ streamCondition, endpoint }, [
+                ...nodePathForEndpoint,
+                "stream-condition"
+            ]);
+        },
         "response-stream": async (responseStream) => {
             if (responseStream == null) {
                 return;
@@ -230,7 +247,8 @@ async function visitEndpoint({
                             location: TypeReferenceLocation.Response
                         });
                     },
-                    property: noop
+                    property: noop,
+                    "status-code": noop
                 });
             }
         },
@@ -269,7 +287,8 @@ async function visitEndpoint({
                     example
                 });
             }
-        }
+        },
+        pagination: noop
     });
 }
 
@@ -286,6 +305,19 @@ async function visitExampleEndpointCall({
     endpoint: RawSchemas.HttpEndpointSchema;
     example: RawSchemas.ExampleEndpointCallSchema;
 }): Promise<void> {
+    // if an example is entirely empty and has code samples, dont validate against the
+    // request or response schemas
+    if (
+        example.headers == null &&
+        example["path-parameters"] == null &&
+        example["query-parameters"] == null &&
+        example.request == null &&
+        example.response == null &&
+        example["code-samples"] != null
+    ) {
+        return;
+    }
+
     await visitor.exampleHttpEndpointCall?.(
         {
             service,
@@ -379,16 +411,38 @@ async function visitExampleEndpointCall({
         nodePathForResponse
     );
     if (example.response != null) {
-        if (example.response.body != null) {
-            await visitAllReferencesInExample({
-                example: example.response.body,
-                visitor,
-                nodePath: nodePathForResponse
-            });
-        }
-        if (example.response.error != null) {
-            await visitor.errorReference?.(example.response.error, [...nodePathForResponse, "error"]);
-        }
+        await visitExampleResponseSchema(endpoint, example.response, {
+            body: async (response) => {
+                if (response.body != null) {
+                    await visitAllReferencesInExample({
+                        example: response.body,
+                        visitor,
+                        nodePath: nodePathForResponse
+                    });
+                }
+                if (response.error != null) {
+                    await visitor.errorReference?.(response.error, [...nodePathForResponse, "error"]);
+                }
+            },
+            stream: async (response) => {
+                for (const example of response.stream) {
+                    await visitAllReferencesInExample({
+                        example,
+                        visitor,
+                        nodePath: nodePathForResponse
+                    });
+                }
+            },
+            events: async (response) => {
+                for (const { data: example } of response.stream) {
+                    await visitAllReferencesInExample({
+                        example,
+                        visitor,
+                        nodePath: nodePathForResponse
+                    });
+                }
+            }
+        });
     }
 
     if (example["code-samples"] != null) {
@@ -431,7 +485,8 @@ export async function visitPathParameters({
                 await visitObject(pathParameter, {
                     docs: createDocsVisitor(visitor, nodePathForPathParameter),
                     variable: async (variable) =>
-                        await visitor.variableReference?.(variable, [...nodePathForPathParameter, "variable"])
+                        await visitor.variableReference?.(variable, [...nodePathForPathParameter, "variable"]),
+                    availability: noop
                 });
             }
         } else {
@@ -441,8 +496,14 @@ export async function visitPathParameters({
                 await visitObject(pathParameter, {
                     docs: createDocsVisitor(visitor, nodePathForPathParameter),
                     type: async (type) => {
-                        await visitTypeReference(type, [...nodePathForPathParameter, "type"]);
-                    }
+                        await visitTypeReference(type, [...nodePathForPathParameter, "type"], {
+                            _default: pathParameter.default,
+                            validation: pathParameter.validation
+                        });
+                    },
+                    default: noop,
+                    validation: noop,
+                    availability: noop
                 });
             }
         }
@@ -476,10 +537,16 @@ async function visitHeaders({
                 name: noop,
                 availability: noop,
                 type: async (type) => {
-                    await visitTypeReference(type, nodePathForHeader);
+                    await visitTypeReference(type, nodePathForHeader, {
+                        _default: header.default,
+                        validation: header.validation
+                    });
                 },
                 docs: createDocsVisitor(visitor, nodePathForHeader),
-                audiences: noop
+                audiences: noop,
+                env: noop,
+                default: noop,
+                validation: noop
             });
         }
     }

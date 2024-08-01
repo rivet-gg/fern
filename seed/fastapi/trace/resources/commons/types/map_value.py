@@ -2,35 +2,24 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
-from ....core.datetime_utils import serialize_datetime
+import pydantic
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, update_forward_refs
 
 
-class MapValue(pydantic.BaseModel):
-    key_value_pairs: typing.List["KeyValuePair"] = pydantic.Field(alias="keyValuePairs")
+class MapValue(UniversalBaseModel):
+    key_value_pairs: typing.List[KeyValuePair] = pydantic.Field(alias="keyValuePairs")
 
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="forbid")  # type: ignore # Pydantic v2
+    else:
 
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        allow_population_by_field_name = True
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        class Config:
+            extra = pydantic.Extra.forbid
 
 
 from .key_value_pair import KeyValuePair  # noqa: E402
-from .variable_value import VariableValue  # noqa: E402
 
-MapValue.update_forward_refs(KeyValuePair=KeyValuePair)
+update_forward_refs(MapValue)

@@ -3,9 +3,9 @@
  */
 
 import * as core from "../../../../core";
-import * as Fiddle from "../../..";
+import * as Fiddle from "../../../index";
 import urlJoin from "url-join";
-import * as serializers from "../../../../serialization";
+import * as serializers from "../../../../serialization/index";
 
 export declare namespace NoReqBody {
     interface Options {
@@ -14,14 +14,24 @@ export declare namespace NoReqBody {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class NoReqBody {
     constructor(protected readonly _options: NoReqBody.Options) {}
 
+    /**
+     * @param {NoReqBody.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.noReqBody.getWithNoRequestBody()
+     */
     public async getWithNoRequestBody(
         requestOptions?: NoReqBody.RequestOptions
     ): Promise<core.APIResponse<Fiddle.types.ObjectWithOptionalField, Fiddle.noReqBody.getWithNoRequestBody.Error>> {
@@ -31,17 +41,21 @@ export class NoReqBody {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.types.ObjectWithOptionalField.parseOrThrow(_response.body, {
+                body: serializers.types.ObjectWithOptionalField.parseOrThrow(_response.body, {
                     unrecognizedObjectKeys: "passthrough",
                     allowUnrecognizedUnionMembers: true,
                     allowUnrecognizedEnumValues: true,
@@ -56,6 +70,12 @@ export class NoReqBody {
         };
     }
 
+    /**
+     * @param {NoReqBody.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.noReqBody.postWithNoRequestBody()
+     */
     public async postWithNoRequestBody(
         requestOptions?: NoReqBody.RequestOptions
     ): Promise<core.APIResponse<string, Fiddle.noReqBody.postWithNoRequestBody.Error>> {
@@ -65,17 +85,21 @@ export class NoReqBody {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.noReqBody.postWithNoRequestBody.Response.parseOrThrow(_response.body, {
+                body: serializers.noReqBody.postWithNoRequestBody.Response.parseOrThrow(_response.body, {
                     unrecognizedObjectKeys: "passthrough",
                     allowUnrecognizedUnionMembers: true,
                     allowUnrecognizedEnumValues: true,
@@ -90,7 +114,7 @@ export class NoReqBody {
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

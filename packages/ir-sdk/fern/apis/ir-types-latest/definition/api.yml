@@ -1,3 +1,4 @@
 name: ir
 docs: |
- Adds support for simple object query parameters.
+ - Add `float` primitive type.
+ - Add a `PrimitiveTypeV2` variant for every `PrimitiveTypeV1`.

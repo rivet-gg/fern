@@ -3,8 +3,8 @@
  */
 
 import * as core from "../../../../../../core";
-import * as Fiddle from "../../../../..";
-import * as serializers from "../../../../../../serialization";
+import * as Fiddle from "../../../../../index";
+import * as serializers from "../../../../../../serialization/index";
 import urlJoin from "url-join";
 
 export declare namespace Container {
@@ -14,14 +14,25 @@ export declare namespace Container {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class Container {
     constructor(protected readonly _options: Container.Options) {}
 
+    /**
+     * @param {string[]} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnListOfPrimitives(["string"])
+     */
     public async getAndReturnListOfPrimitives(
         request: string[],
         requestOptions?: Container.RequestOptions
@@ -32,20 +43,24 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.endpoints.container.getAndReturnListOfPrimitives.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.endpoints.container.getAndReturnListOfPrimitives.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnListOfPrimitives.Response.parseOrThrow(
+                body: serializers.endpoints.container.getAndReturnListOfPrimitives.Response.parseOrThrow(
                     _response.body,
                     {
                         unrecognizedObjectKeys: "passthrough",
@@ -63,6 +78,15 @@ export class Container {
         };
     }
 
+    /**
+     * @param {Fiddle.types.ObjectWithRequiredField[]} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnListOfObjects([{
+     *             string: "string"
+     *         }])
+     */
     public async getAndReturnListOfObjects(
         request: Fiddle.types.ObjectWithRequiredField[],
         requestOptions?: Container.RequestOptions
@@ -78,28 +102,29 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.endpoints.container.getAndReturnListOfObjects.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.endpoints.container.getAndReturnListOfObjects.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnListOfObjects.Response.parseOrThrow(
-                    _response.body,
-                    {
-                        unrecognizedObjectKeys: "passthrough",
-                        allowUnrecognizedUnionMembers: true,
-                        allowUnrecognizedEnumValues: true,
-                        breadcrumbsPrefix: ["response"],
-                    }
-                ),
+                body: serializers.endpoints.container.getAndReturnListOfObjects.Response.parseOrThrow(_response.body, {
+                    unrecognizedObjectKeys: "passthrough",
+                    allowUnrecognizedUnionMembers: true,
+                    allowUnrecognizedEnumValues: true,
+                    breadcrumbsPrefix: ["response"],
+                }),
             };
         }
 
@@ -109,6 +134,13 @@ export class Container {
         };
     }
 
+    /**
+     * @param {Set<string>} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnSetOfPrimitives(new Set(["string"]))
+     */
     public async getAndReturnSetOfPrimitives(
         request: Set<string>,
         requestOptions?: Container.RequestOptions
@@ -119,20 +151,24 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.endpoints.container.getAndReturnSetOfPrimitives.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.endpoints.container.getAndReturnSetOfPrimitives.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnSetOfPrimitives.Response.parseOrThrow(
+                body: serializers.endpoints.container.getAndReturnSetOfPrimitives.Response.parseOrThrow(
                     _response.body,
                     {
                         unrecognizedObjectKeys: "passthrough",
@@ -150,6 +186,15 @@ export class Container {
         };
     }
 
+    /**
+     * @param {Fiddle.types.ObjectWithRequiredField[]} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnSetOfObjects(new Set([{
+     *             string: "string"
+     *         }]))
+     */
     public async getAndReturnSetOfObjects(
         request: Fiddle.types.ObjectWithRequiredField[],
         requestOptions?: Container.RequestOptions
@@ -165,28 +210,29 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.endpoints.container.getAndReturnSetOfObjects.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.endpoints.container.getAndReturnSetOfObjects.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnSetOfObjects.Response.parseOrThrow(
-                    _response.body,
-                    {
-                        unrecognizedObjectKeys: "passthrough",
-                        allowUnrecognizedUnionMembers: true,
-                        allowUnrecognizedEnumValues: true,
-                        breadcrumbsPrefix: ["response"],
-                    }
-                ),
+                body: serializers.endpoints.container.getAndReturnSetOfObjects.Response.parseOrThrow(_response.body, {
+                    unrecognizedObjectKeys: "passthrough",
+                    allowUnrecognizedUnionMembers: true,
+                    allowUnrecognizedEnumValues: true,
+                    breadcrumbsPrefix: ["response"],
+                }),
             };
         }
 
@@ -196,6 +242,15 @@ export class Container {
         };
     }
 
+    /**
+     * @param {Record<string, string>} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnMapPrimToPrim({
+     *         "string": "string"
+     *     })
+     */
     public async getAndReturnMapPrimToPrim(
         request: Record<string, string>,
         requestOptions?: Container.RequestOptions
@@ -206,28 +261,29 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.endpoints.container.getAndReturnMapPrimToPrim.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.endpoints.container.getAndReturnMapPrimToPrim.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnMapPrimToPrim.Response.parseOrThrow(
-                    _response.body,
-                    {
-                        unrecognizedObjectKeys: "passthrough",
-                        allowUnrecognizedUnionMembers: true,
-                        allowUnrecognizedEnumValues: true,
-                        breadcrumbsPrefix: ["response"],
-                    }
-                ),
+                body: serializers.endpoints.container.getAndReturnMapPrimToPrim.Response.parseOrThrow(_response.body, {
+                    unrecognizedObjectKeys: "passthrough",
+                    allowUnrecognizedUnionMembers: true,
+                    allowUnrecognizedEnumValues: true,
+                    breadcrumbsPrefix: ["response"],
+                }),
             };
         }
 
@@ -237,6 +293,17 @@ export class Container {
         };
     }
 
+    /**
+     * @param {Record<string, Fiddle.types.ObjectWithRequiredField>} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnMapOfPrimToObject({
+     *         "string": {
+     *             string: "string"
+     *         }
+     *     })
+     */
     public async getAndReturnMapOfPrimToObject(
         request: Record<string, Fiddle.types.ObjectWithRequiredField>,
         requestOptions?: Container.RequestOptions
@@ -252,20 +319,24 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.endpoints.container.getAndReturnMapOfPrimToObject.Request.jsonOrThrow(request, {
+            requestType: "json",
+            body: serializers.endpoints.container.getAndReturnMapOfPrimToObject.Request.jsonOrThrow(request, {
                 unrecognizedObjectKeys: "strip",
             }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnMapOfPrimToObject.Response.parseOrThrow(
+                body: serializers.endpoints.container.getAndReturnMapOfPrimToObject.Response.parseOrThrow(
                     _response.body,
                     {
                         unrecognizedObjectKeys: "passthrough",
@@ -283,6 +354,15 @@ export class Container {
         };
     }
 
+    /**
+     * @param {Fiddle.types.ObjectWithRequiredField} request
+     * @param {Container.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.container.getAndReturnOptional({
+     *         string: "string"
+     *     })
+     */
     public async getAndReturnOptional(
         request?: Fiddle.types.ObjectWithRequiredField,
         requestOptions?: Container.RequestOptions
@@ -298,23 +378,27 @@ export class Container {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             body:
                 request != null
-                    ? await serializers.endpoints.container.getAndReturnOptional.Request.jsonOrThrow(request, {
+                    ? serializers.endpoints.container.getAndReturnOptional.Request.jsonOrThrow(request, {
                           unrecognizedObjectKeys: "strip",
                       })
                     : undefined,
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.endpoints.container.getAndReturnOptional.Response.parseOrThrow(_response.body, {
+                body: serializers.endpoints.container.getAndReturnOptional.Response.parseOrThrow(_response.body, {
                     unrecognizedObjectKeys: "passthrough",
                     allowUnrecognizedUnionMembers: true,
                     allowUnrecognizedEnumValues: true,
@@ -329,7 +413,7 @@ export class Container {
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

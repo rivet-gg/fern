@@ -1,4 +1,5 @@
-import { HttpHeader, InlinedRequestBodyProperty, QueryParameter } from "@fern-fern/ir-sdk/api";
+import { ExampleEndpointCall, HttpHeader, InlinedRequestBodyProperty, QueryParameter } from "@fern-fern/ir-sdk/api";
+import { GetReferenceOpts } from "@fern-typescript/commons";
 import { GeneratedRequestWrapper, SdkContext } from "@fern-typescript/contexts";
 import { ts } from "ts-morph";
 import { AbstractRequestParameter } from "./AbstractRequestParameter";
@@ -15,6 +16,10 @@ export class FileUploadRequestParameter extends AbstractRequestParameter {
         };
     }
 
+    public getType(context: SdkContext): ts.TypeNode {
+        return context.requestWrapper.getReferenceToRequestWrapper(this.packageId, this.endpoint.name);
+    }
+
     public getInitialStatements(): ts.Statement[] {
         return [];
     }
@@ -23,12 +28,25 @@ export class FileUploadRequestParameter extends AbstractRequestParameter {
         throw new Error("Cannot get reference to request body in file upload request");
     }
 
-    public generateExample(): ts.Expression | undefined {
-        return undefined;
+    public generateExample({
+        context,
+        example,
+        opts
+    }: {
+        context: SdkContext;
+        example: ExampleEndpointCall;
+        opts: GetReferenceOpts;
+    }): ts.Expression | undefined {
+        const requestWrapperExample = this.getGeneratedRequestWrapper(context).generateExample(example);
+        return requestWrapperExample?.build(context, opts);
     }
 
     public getAllQueryParameters(context: SdkContext): QueryParameter[] {
         return this.getGeneratedRequestWrapper(context).getAllQueryParameters();
+    }
+
+    public isOptional({ context }: { context: SdkContext }): boolean {
+        return false;
     }
 
     public withQueryParameter(

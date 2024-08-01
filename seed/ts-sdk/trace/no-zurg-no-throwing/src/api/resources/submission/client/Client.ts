@@ -4,19 +4,26 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as SeedTrace from "../../..";
+import * as SeedTrace from "../../../index";
 import urlJoin from "url-join";
 
 export declare namespace Submission {
     interface Options {
         environment?: core.Supplier<environments.SeedTraceEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
+        /** Override the X-Random-Header header */
         xRandomHeader?: core.Supplier<string | undefined>;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
+        /** Override the X-Random-Header header */
+        xRandomHeader?: string | undefined;
     }
 }
 
@@ -28,6 +35,12 @@ export class Submission {
 
     /**
      * Returns sessionId and execution server URL for session. Spins up server.
+     *
+     * @param {SeedTrace.Language} language
+     * @param {Submission.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.submission.createExecutionSession(SeedTrace.Language.Java)
      */
     public async createExecutionSession(
         language: SeedTrace.Language,
@@ -38,7 +51,7 @@ export class Submission {
         const _response = await core.fetcher({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/sessions/create-session/${language}`
+                `/sessions/create-session/${encodeURIComponent(language)}`
             ),
             method: "POST",
             headers: {
@@ -48,12 +61,16 @@ export class Submission {
                         ? await core.Supplier.get(this._options.xRandomHeader)
                         : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
@@ -70,6 +87,12 @@ export class Submission {
 
     /**
      * Returns execution server URL for session. Returns empty if session isn't registered.
+     *
+     * @param {string} sessionId
+     * @param {Submission.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.submission.getExecutionSession("string")
      */
     public async getExecutionSession(
         sessionId: string,
@@ -80,7 +103,7 @@ export class Submission {
         const _response = await core.fetcher({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/sessions/${sessionId}`
+                `/sessions/${encodeURIComponent(sessionId)}`
             ),
             method: "GET",
             headers: {
@@ -90,12 +113,16 @@ export class Submission {
                         ? await core.Supplier.get(this._options.xRandomHeader)
                         : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
@@ -112,6 +139,12 @@ export class Submission {
 
     /**
      * Stops execution session.
+     *
+     * @param {string} sessionId
+     * @param {Submission.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.submission.stopExecutionSession("string")
      */
     public async stopExecutionSession(
         sessionId: string,
@@ -120,7 +153,7 @@ export class Submission {
         const _response = await core.fetcher({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/sessions/stop/${sessionId}`
+                `/sessions/stop/${encodeURIComponent(sessionId)}`
             ),
             method: "DELETE",
             headers: {
@@ -130,12 +163,16 @@ export class Submission {
                         ? await core.Supplier.get(this._options.xRandomHeader)
                         : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
@@ -150,6 +187,12 @@ export class Submission {
         };
     }
 
+    /**
+     * @param {Submission.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.submission.getExecutionSessionsState()
+     */
     public async getExecutionSessionsState(
         requestOptions?: Submission.RequestOptions
     ): Promise<
@@ -171,12 +214,16 @@ export class Submission {
                         ? await core.Supplier.get(this._options.xRandomHeader)
                         : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
@@ -191,7 +238,7 @@ export class Submission {
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

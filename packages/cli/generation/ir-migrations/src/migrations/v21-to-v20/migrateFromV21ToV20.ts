@@ -1,4 +1,4 @@
-import { GeneratorName } from "@fern-api/generators-configuration";
+import { GeneratorName } from "@fern-api/configuration";
 import { mapValues } from "lodash-es";
 import { IrVersions } from "../../ir-versions";
 import { IrMigrationContext } from "../../IrMigrationContext";
@@ -38,10 +38,8 @@ export const V21_TO_V20_MIGRATION: IrMigration<
         [GeneratorName.RUBY_SDK]: GeneratorWasNotCreatedYet,
         [GeneratorName.CSHARP_MODEL]: GeneratorWasNotCreatedYet,
         [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet,
-        [GeneratorName.CSHARP_MODEL]: GeneratorWasNotCreatedYet,
-        [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet,
-        [GeneratorName.CSHARP_MODEL]: GeneratorWasNotCreatedYet,
-        [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet
+        [GeneratorName.SWIFT_MODEL]: GeneratorWasNotCreatedYet,
+        [GeneratorName.SWIFT_SDK]: GeneratorWasNotCreatedYet
     },
     jsonifyEarlierVersion: (ir) => ir,
     migrateBackwards: (v21, context): IrVersions.V20.ir.IntermediateRepresentation => {

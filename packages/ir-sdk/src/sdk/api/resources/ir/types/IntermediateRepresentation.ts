@@ -8,6 +8,9 @@ import * as FernIr from "../../..";
  * Complete representation of the API schema
  */
 export interface IntermediateRepresentation {
+    /** The unique identifier for the API definition used within FDR. This is retrieved once a definition has been registered. */
+    fdrApiDefinitionId: string | undefined;
+    apiVersion: FernIr.ApiVersionScheme | undefined;
     /** This is the human readable unique id for the API. */
     apiName: FernIr.Name;
     apiDisplayName: string | undefined;
@@ -23,6 +26,8 @@ export interface IntermediateRepresentation {
     services: Record<FernIr.ServiceId, FernIr.HttpService>;
     /** The webhooks sent by this API */
     webhookGroups: Record<FernIr.WebhookGroupId, FernIr.WebhookGroup>;
+    /** The websocket channels served by this API */
+    websocketChannels: Record<FernIr.WebSocketChannelId, FernIr.WebSocketChannel> | undefined;
     errors: Record<FernIr.ErrorId, FernIr.ErrorDeclaration>;
     subpackages: Record<FernIr.SubpackageId, FernIr.Subpackage>;
     rootPackage: FernIr.Package;
@@ -34,4 +39,5 @@ export interface IntermediateRepresentation {
     sdkConfig: FernIr.SdkConfig;
     variables: FernIr.VariableDeclaration[];
     serviceTypeReferenceInfo: FernIr.ServiceTypeReferenceInfo;
+    readmeConfig: FernIr.ReadmeConfig | undefined;
 }

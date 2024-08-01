@@ -2,18 +2,42 @@ name: ci
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
     paths:
+      - ".pnp.cjs"
+      - "yarn.lock"
       - "packages/**"
+      # IR snapshot tests run on test definitions
+      - "test-definitions/**"
       # Add any generators that are written in TypeScript
       - "generators/openapi/**"
       - "generators/postman/**"
       - "generators/ruby/**"
       - "generators/typescript/**"
+      - "generators/csharp/**"
+      - "generators/swift/**"
     branches:
       - main
+  pull_request:
+    paths:
+      - ".pnp.cjs"
+      - "yarn.lock"
+      - "packages/**"
+      # IR snapshot tests run on test definitions
+      - "test-definitions/**"
+      # Add any generators that are written in TypeScript
+      - "generators/openapi/**"
+      - "generators/postman/**"
+      - "generators/ruby/**"
+      - "generators/typescript/**"
+      - "generators/csharp/**"
+      - "generators/swift/**"
+    branches:
+      - main
+
+# Cancel previous workflows on previous push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -49,7 +73,7 @@ jobs:
         run: git --no-pager diff --exit-code
 
   compile:
-    runs-on: ubuntu-latest
+    runs-on: CLI
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -65,32 +89,7 @@ jobs:
       - name: compile
         run: yarn compile
 
-      - name: lint:eslint
-        run: yarn lint:eslint
-
-  check-test-definitions:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: "yarn"
-
-      - name: Install Deps
-        run: yarn install
-
-      - name: Fern check
-        env:
-          FORCE_COLOR: "2"
-        run: |
-          yarn workspace @fern-api/cli dist:cli:dev
-          cd test-definitions
-          FERN_NO_VERSION_REDIRECTION=true node $(yarn workspace @fern-api/cli bin fern:dev) check
-
-  test:
+  eslint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -104,14 +103,31 @@ jobs:
       - name: Install
         run: yarn install
 
+      - name: lint:eslint
+        run: yarn lint:eslint
+
+  test:
+    runs-on: Test
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: "yarn"
+
+      - name: Install
+        run: yarn install
+
       - name: Run tests
-        run: yarn test --ci
+        run: yarn test --maxWorkers 15 --ci --silent
 
       - name: Ensure no changes to git-tracked files
         run: git --no-pager diff --exit-code
 
   ete-tests:
-    runs-on: ubuntu-latest
+    runs-on: CLI
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -149,9 +165,6 @@ jobs:
       - name: Install
         run: yarn install
 
-      - name: Install Fern
-        run: npm install -g fern-api
-
       - name: Check API definition is valid
         env:
           FORCE_COLOR: "2"
@@ -162,3 +175,66 @@ jobs:
           yarn workspace @fern-api/cli dist:cli:dev
           cli_path="$(yarn workspace @fern-api/cli bin fern:dev)"
           ./scripts/live-test.sh "$cli_path" "$FERN_ORG_TOKEN_DEV"
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      typescript: ${{ steps.filter.outputs.typescript }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            typescript:
+              - 'generators/typescript/sdk/**'
+
+  node-version-tests:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.typescript == 'true' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install
+        run: yarn install
+
+      - name: Load NVM
+        run: |
+          source /home/runner/.nvm/nvm.sh
+        shell: bash
+
+      - name: Run file tests
+        run: ./scripts/node-all-versions-test.sh
+
+      - name: Ensure no changes to git-tracked files
+        run: git --no-pager diff --exit-code
+
+  cloudflare-startup-tests:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.typescript == 'true' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run cloudflare startup test
+        run: ./scripts/cloudflare-startup-test.sh
+
+      - name: Ensure no changes to git-tracked files
+        run: git --no-pager diff --exit-code
+
+  browser-startup-tests:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.typescript == 'true' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Run browser startup test
+        run: ./scripts/browser-startup-test.sh
+
+      - name: Ensure no changes to git-tracked files
+        run: git --no-pager diff --exit-code

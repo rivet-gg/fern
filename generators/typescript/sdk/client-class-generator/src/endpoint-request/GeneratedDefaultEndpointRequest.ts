@@ -31,6 +31,7 @@ export declare namespace GeneratedDefaultEndpointRequest {
         endpoint: HttpEndpoint;
         requestBody: HttpRequestBody.InlinedRequestBody | HttpRequestBody.Reference | undefined;
         generatedSdkClientClass: GeneratedSdkClientClassImpl;
+        retainOriginalCasing: boolean;
     }
 }
 
@@ -48,6 +49,7 @@ export class GeneratedDefaultEndpointRequest implements GeneratedEndpointRequest
     private endpoint: HttpEndpoint;
     private requestBody: HttpRequestBody.InlinedRequestBody | HttpRequestBody.Reference | undefined;
     private generatedSdkClientClass: GeneratedSdkClientClassImpl;
+    private retainOriginalCasing: boolean;
 
     constructor({
         ir,
@@ -56,7 +58,8 @@ export class GeneratedDefaultEndpointRequest implements GeneratedEndpointRequest
         service,
         endpoint,
         requestBody,
-        generatedSdkClientClass
+        generatedSdkClientClass,
+        retainOriginalCasing
     }: GeneratedDefaultEndpointRequest.Init) {
         this.ir = ir;
         this.packageId = packageId;
@@ -64,6 +67,7 @@ export class GeneratedDefaultEndpointRequest implements GeneratedEndpointRequest
         this.endpoint = endpoint;
         this.requestBody = requestBody;
         this.generatedSdkClientClass = generatedSdkClientClass;
+        this.retainOriginalCasing = retainOriginalCasing;
         this.requestParameter =
             sdkRequest != null
                 ? SdkRequestShape._visit<RequestParameter>(sdkRequest.shape, {
@@ -91,12 +95,22 @@ export class GeneratedDefaultEndpointRequest implements GeneratedEndpointRequest
         });
     }
 
-    public getEndpointParameters(context: SdkContext): OptionalKind<ParameterDeclarationStructure>[] {
-        const parameters: OptionalKind<ParameterDeclarationStructure>[] = [];
+    public getRequestParameter(context: SdkContext): ts.TypeNode | undefined {
+        return this.requestParameter?.getType(context);
+    }
+
+    public getEndpointParameters(
+        context: SdkContext
+    ): OptionalKind<ParameterDeclarationStructure & { docs?: string }>[] {
+        const parameters: OptionalKind<ParameterDeclarationStructure & { docs?: string }>[] = [];
         for (const pathParameter of getPathParametersForEndpointSignature(this.service, this.endpoint)) {
             parameters.push({
-                name: getParameterNameForPathParameter(pathParameter),
-                type: getTextOfTsNode(context.type.getReferenceToType(pathParameter.valueType).typeNode)
+                name: getParameterNameForPathParameter({
+                    pathParameter,
+                    retainOriginalCasing: this.retainOriginalCasing
+                }),
+                type: getTextOfTsNode(context.type.getReferenceToType(pathParameter.valueType).typeNode),
+                docs: pathParameter.docs
             });
         }
         if (this.requestParameter != null) {
@@ -129,10 +143,17 @@ export class GeneratedDefaultEndpointRequest implements GeneratedEndpointRequest
         }
         if (this.requestParameter != null) {
             const requestParameterExample = this.requestParameter.generateExample({ context, example, opts });
-            if (requestParameterExample == null) {
+            if (
+                requestParameterExample != null &&
+                getTextOfTsNode(requestParameterExample) === "{}" &&
+                this.requestParameter.isOptional({ context })
+            ) {
+                // pass
+            } else if (requestParameterExample != null) {
+                result.push(requestParameterExample);
+            } else if (!this.requestParameter.isOptional({ context })) {
                 return undefined;
             }
-            result.push(requestParameterExample);
         }
         return result;
     }
@@ -155,12 +176,13 @@ export class GeneratedDefaultEndpointRequest implements GeneratedEndpointRequest
 
     public getFetcherRequestArgs(
         context: SdkContext
-    ): Pick<Fetcher.Args, "headers" | "queryParameters" | "body" | "contentType"> {
+    ): Pick<Fetcher.Args, "headers" | "queryParameters" | "body" | "contentType" | "requestType"> {
         return {
             headers: this.getHeaders(context),
             queryParameters: this.queryParams.getReferenceTo(context),
             body: this.getSerializedRequestBodyWithNullCheck(context),
-            contentType: "application/json"
+            contentType: "application/json",
+            requestType: "json"
         };
     }
 

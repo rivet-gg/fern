@@ -8,12 +8,20 @@ import { Service } from "./api/resources/service/client/Client";
 export declare namespace SeedAuthEnvironmentVariablesClient {
     interface Options {
         environment: core.Supplier<string>;
-        apiKey: core.Supplier<string>;
+        apiKey?: core.Supplier<string | undefined>;
+        /** Override the X-Another-Header header */
+        xAnotherHeader: core.Supplier<string>;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
+        /** Override the X-Another-Header header */
+        xAnotherHeader?: string;
     }
 }
 

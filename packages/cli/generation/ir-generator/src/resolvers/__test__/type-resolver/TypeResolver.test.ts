@@ -7,34 +7,40 @@ import { TypeResolverImpl } from "../../TypeResolver";
 
 describe("TypeResolver", () => {
     it("illogical self-referencing types", async () => {
+        const context = createMockTaskContext();
         const parseResult = await loadAPIWorkspace({
             absolutePathToWorkspace: join(
                 AbsoluteFilePath.of(__dirname),
                 RelativeFilePath.of("fixtures/illogical-self-referencing/fern/api")
             ),
-            context: createMockTaskContext(),
+            context,
             cliVersion: "0.0.0",
             workspaceName: undefined
         });
         if (!parseResult.didSucceed) {
             throw new Error("Failed to parse workspace: " + JSON.stringify(parseResult));
         }
-        if (parseResult.workspace.type === "openapi") {
+        if (parseResult.workspace.type === "oss") {
             throw new Error("Expected fern workspace, but received openapi");
         }
+        const workspace = await parseResult.workspace.toFernWorkspace({ context });
 
         const fooFilepath = RelativeFilePath.of("foo.yml");
-        const fooFile = parseResult.workspace.definition.namedDefinitionFiles[fooFilepath];
+        const fooFile = workspace.definition.namedDefinitionFiles[fooFilepath];
         if (fooFile == null) {
             throw new Error(`${fooFilepath} does not exist.`);
         }
 
-        const typeResolver = new TypeResolverImpl(parseResult.workspace);
+        const typeResolver = new TypeResolverImpl(workspace);
         const fernFileContext = constructFernFileContext({
             relativeFilepath: fooFilepath,
             definitionFile: fooFile.contents,
-            casingsGenerator: constructCasingsGenerator({ generationLanguage: undefined, smartCasing: false }),
-            rootApiFile: parseResult.workspace.definition.rootApiFile.contents
+            casingsGenerator: constructCasingsGenerator({
+                generationLanguage: undefined,
+                keywords: undefined,
+                smartCasing: false
+            }),
+            rootApiFile: workspace.definition.rootApiFile.contents
         });
 
         const resolvedFooType = typeResolver.resolveType({

@@ -4,18 +4,21 @@
 package com.seed.trace.resources.migration;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.seed.trace.core.ApiError;
 import com.seed.trace.core.ClientOptions;
 import com.seed.trace.core.ObjectMappers;
 import com.seed.trace.core.RequestOptions;
+import com.seed.trace.core.SeedTraceApiException;
+import com.seed.trace.core.SeedTraceException;
 import com.seed.trace.resources.migration.requests.GetAttemptedMigrationsRequest;
 import com.seed.trace.resources.migration.types.Migration;
 import java.io.IOException;
 import java.util.List;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class MigrationClient {
     protected final ClientOptions clientOptions;
@@ -42,18 +45,23 @@ public class MigrationClient {
                 .addHeader("Content-Type", "application/json");
         _requestBuilder.addHeader("admin-key-header", request.getAdminKeyHeader());
         Request okhttpRequest = _requestBuilder.build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
                 return ObjectMappers.JSON_MAPPER.readValue(
-                        response.body().string(), new TypeReference<List<Migration>>() {});
+                        responseBody.string(), new TypeReference<List<Migration>>() {});
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            throw new SeedTraceApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedTraceException("Network error executing HTTP request", e);
         }
     }
 }

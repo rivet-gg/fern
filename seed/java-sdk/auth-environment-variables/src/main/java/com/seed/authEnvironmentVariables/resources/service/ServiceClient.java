@@ -3,15 +3,19 @@
  */
 package com.seed.authEnvironmentVariables.resources.service;
 
-import com.seed.authEnvironmentVariables.core.ApiError;
 import com.seed.authEnvironmentVariables.core.ClientOptions;
 import com.seed.authEnvironmentVariables.core.ObjectMappers;
 import com.seed.authEnvironmentVariables.core.RequestOptions;
+import com.seed.authEnvironmentVariables.core.SeedAuthEnvironmentVariablesApiException;
+import com.seed.authEnvironmentVariables.core.SeedAuthEnvironmentVariablesException;
+import com.seed.authEnvironmentVariables.resources.service.requests.HeaderAuthRequest;
 import java.io.IOException;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class ServiceClient {
     protected final ClientOptions clientOptions;
@@ -41,17 +45,63 @@ public class ServiceClient {
                 .headers(Headers.of(clientOptions.headers(requestOptions)))
                 .addHeader("Content-Type", "application/json")
                 .build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
-                return ObjectMappers.JSON_MAPPER.readValue(response.body().string(), String.class);
+                return ObjectMappers.JSON_MAPPER.readValue(responseBody.string(), String.class);
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            throw new SeedAuthEnvironmentVariablesApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedAuthEnvironmentVariablesException("Network error executing HTTP request", e);
+        }
+    }
+
+    /**
+     * GET request with custom api key
+     */
+    public String getWithHeader(HeaderAuthRequest request) {
+        return getWithHeader(request, null);
+    }
+
+    /**
+     * GET request with custom api key
+     */
+    public String getWithHeader(HeaderAuthRequest request, RequestOptions requestOptions) {
+        HttpUrl httpUrl = HttpUrl.parse(this.clientOptions.environment().getUrl())
+                .newBuilder()
+                .addPathSegments("apiKeyInHeader")
+                .build();
+        Request.Builder _requestBuilder = new Request.Builder()
+                .url(httpUrl)
+                .method("GET", null)
+                .headers(Headers.of(clientOptions.headers(requestOptions)))
+                .addHeader("Content-Type", "application/json");
+        _requestBuilder.addHeader("X-Endpoint-Header", request.getXEndpointHeader());
+        Request okhttpRequest = _requestBuilder.build();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
+            if (response.isSuccessful()) {
+                return ObjectMappers.JSON_MAPPER.readValue(responseBody.string(), String.class);
+            }
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            throw new SeedAuthEnvironmentVariablesApiException(
+                    "Error with status code " + response.code(),
+                    response.code(),
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
+        } catch (IOException e) {
+            throw new SeedAuthEnvironmentVariablesException("Network error executing HTTP request", e);
         }
     }
 }

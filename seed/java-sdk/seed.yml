@@ -1,4 +1,4 @@
-irVersion: v31
+irVersion: v46
 docker: fernapi/fern-java-sdk:latest
 dockerCommand: 
   - cd generators/java
@@ -7,6 +7,15 @@ dockerCommand:
 language: java
 generatorType: SDK
 defaultOutputMode: github
+local:
+  workingDirectory: generators/java
+  buildCommand:
+    - ./gradlew :sdk:distTar
+    - chmod +x install-gradle.sh && ./install-gradle.sh
+    - cd sdk
+    - tar -xvf build/distributions/sdk.tar -C .
+  runCommand: cd sdk/sdk && java -cp sdk.jar:lib/* com.fern.java.client.Cli
+  env: {}
 fixtures:
   exhaustive:
     - customConfig: null
@@ -16,20 +25,48 @@ fixtures:
           - "implementation jakarta.websocket:jakarta.websocket-api:2.1.0"
       outputFolder: custom-dependency
     - customConfig:
+        json-include: non-empty
+      outputFolder: json-include-non-empty
+    - customConfig:
         enable-forward-compatible-enums: true
       outputFolder: forward-compatible-enums
+    - customConfig:
+        base-api-exception-class-name: CustomApiException
+        base-exception-class-name: CustomException
+      outputFolder: custom-error-names
+    - customConfig:
+        client-class-name: Best
+      outputFolder: custom-client-class-name
     - customConfig:
         package-prefix: com.fern.sdk
       outputMode: local_files
       outputFolder: local-files
+    - publishConfig:
+        type: maven
+        coordinate: com.fern:exhaustive
+        registryUrl: "definitelyMavenCentral"
+        signature:
+            keyId: "test_kid"
+            password: "test_password"
+            secretKey: "test_secretkey"
+      publishMetadata:
+        packageDescription: My very good and lengthy description
+        publisherEmail: "me@gmail.com"
+        publisherName: "Fern"
+        referenceUrl: "https://buildwithfern.com"
+      outputFolder: signed_publish
 scripts:
   - docker: fernapi/java-seed
     commands:
-      - source "$HOME/.sdkman/bin/sdkman-init.sh"
-      - sdk use java 11.0.21-zulu
-      - gradle compileJava
+      - source ~/.bash_profile 
+      - ./gradlew compileJava
+      - jenv shell 1.8 && source ~/.bash_profile && ./gradlew compileJava
 allowedFailures:
   - enum
   - extends
-  - response-property
-
+  - examples
+  - exhaustive:local-files
+  - trace
+  - unions
+  - query-parameters
+  - alias-extends

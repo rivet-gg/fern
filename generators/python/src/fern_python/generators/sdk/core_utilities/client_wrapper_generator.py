@@ -4,11 +4,13 @@ from enum import Enum
 from typing import List, Optional
 
 import fern.ir.resources as ir_types
+from fdr import PayloadInput, Template, TemplateInput
 
 from fern_python.codegen import AST, Project, SourceFile
 from fern_python.codegen.ast.nodes.code_writer.code_writer import CodeWriterFunction
 from fern_python.external_dependencies import httpx
 from fern_python.generators.sdk.core_utilities.core_utilities import CoreUtilities
+from fern_python.snippet.template_utils import TemplateGenerator
 
 from ..context.sdk_generator_context import SdkGeneratorContext
 from ..environment_generators import GeneratedEnvironment
@@ -25,6 +27,8 @@ class ConstructorParameter:
     header_prefix: typing.Optional[str] = None
     environment_variable: typing.Optional[str] = None
     is_basic: bool = False
+    docs: typing.Optional[str] = None
+    template: typing.Optional[Template] = None
 
 
 @dataclass
@@ -53,10 +57,13 @@ class ClientWrapperGenerator:
 
     GET_HEADERS_METHOD_NAME = "get_headers"
     GET_BASE_URL_METHOD_NAME = "get_base_url"
+    GET_TIMEOUT_METHOD_NAME = "get_timeout"
     GET_ENVIRONMENT_METHOD_NAME = "get_environment"
 
     BASE_URL_PARAMETER_NAME = "base_url"
     ENVIRONMENT_PARAMETER_NAME = "environment"
+
+    TIMEOUT_PARAMETER_NAME = "timeout"
 
     HTTPX_CLIENT_MEMBER_NAME = "httpx_client"
 
@@ -76,8 +83,10 @@ class ClientWrapperGenerator:
     def generate(self, source_file: SourceFile, project: Project) -> None:
         constructor_info = self._get_constructor_info()
         url_constructor_param = self._get_url_storage_info()
+        timeout_param = self._get_timeout_constructor_parameter()
         constructor_parameters = [param for param in constructor_info.constructor_parameters]
         constructor_parameters.append(url_constructor_param)
+        constructor_parameters.append(timeout_param)
 
         source_file.add_class_declaration(
             declaration=self._create_base_client_wrapper_class_declaration(
@@ -121,6 +130,18 @@ class ClientWrapperGenerator:
                 name=ClientWrapperGenerator.GET_BASE_URL_METHOD_NAME,
                 signature=AST.FunctionSignature(return_type=AST.TypeHint.str_()),
                 body=AST.CodeWriter(f"return self._{ClientWrapperGenerator.BASE_URL_PARAMETER_NAME}"),
+            ),
+        )
+
+    def _get_timeout_constructor_parameter(self) -> ConstructorParameter:
+        return ConstructorParameter(
+            constructor_parameter_name=ClientWrapperGenerator.TIMEOUT_PARAMETER_NAME,
+            type_hint=AST.TypeHint.optional(AST.TypeHint.float_()),
+            private_member_name=f"_{ClientWrapperGenerator.TIMEOUT_PARAMETER_NAME}",
+            getter_method=AST.FunctionDeclaration(
+                name=ClientWrapperGenerator.GET_TIMEOUT_METHOD_NAME,
+                signature=AST.FunctionSignature(return_type=AST.TypeHint.optional(AST.TypeHint.float_())),
+                body=AST.CodeWriter(f"return self._{ClientWrapperGenerator.TIMEOUT_PARAMETER_NAME}"),
             ),
         )
 
@@ -203,7 +224,7 @@ class ClientWrapperGenerator:
                 ),
                 body=AST.CodeWriter(
                     self._get_write_derived_client_wrapper_constructor_body(
-                        constructor_parameters=constructor_parameters
+                        constructor_parameters=constructor_parameters, is_async=False
                     )
                 ),
             ),
@@ -232,7 +253,7 @@ class ClientWrapperGenerator:
                 ),
                 body=AST.CodeWriter(
                     self._get_write_derived_client_wrapper_constructor_body(
-                        constructor_parameters=constructor_parameters
+                        constructor_parameters=constructor_parameters, is_async=True
                     )
                 ),
             ),
@@ -241,8 +262,10 @@ class ClientWrapperGenerator:
         return class_declaration
 
     def _get_write_derived_client_wrapper_constructor_body(
-        self, *, constructor_parameters: List[ConstructorParameter]
+        self, *, constructor_parameters: List[ConstructorParameter], is_async: bool
     ) -> CodeWriterFunction:
+        has_base_url = get_client_wrapper_url_type(ir=self._context.ir) == ClientWrapperUrlStorage.URL
+
         def _write_derived_client_wrapper_constructor_body(writer: AST.NodeWriter) -> None:
             writer.write_line(
                 "super().__init__("
@@ -254,8 +277,17 @@ class ClientWrapperGenerator:
                 )
                 + ")"
             )
-            writer.write_line(
-                f"self.{ClientWrapperGenerator.HTTPX_CLIENT_MEMBER_NAME} = {ClientWrapperGenerator.HTTPX_CLIENT_MEMBER_NAME}"
+            writer.write(f"self.{ClientWrapperGenerator.HTTPX_CLIENT_MEMBER_NAME} = ")
+            writer.write_node(
+                self._context.core_utilities.http_client(
+                    base_client=AST.Expression(ClientWrapperGenerator.HTTPX_CLIENT_MEMBER_NAME),
+                    base_url=AST.Expression(f"self.{ClientWrapperGenerator.GET_BASE_URL_METHOD_NAME}()")
+                    if has_base_url
+                    else None,
+                    base_headers=AST.Expression(f"self.{ClientWrapperGenerator.GET_HEADERS_METHOD_NAME}()"),
+                    base_timeout=AST.Expression(f"self.{ClientWrapperGenerator.GET_TIMEOUT_METHOD_NAME}()"),
+                    is_async=is_async,
+                )
             )
 
         return _write_derived_client_wrapper_constructor_body
@@ -395,7 +427,7 @@ class ClientWrapperGenerator:
 
         return _write_constructor_body
 
-    def _get_constructor_info(self) -> ConstructorInfo:
+    def _get_constructor_info(self, exclude_auth: bool = False) -> ConstructorInfo:
         parameters: List[ConstructorParameter] = []
         literal_headers: List[LiteralHeader] = []
 
@@ -420,7 +452,14 @@ class ClientWrapperGenerator:
                         f'{constructor_parameter_name}="YOUR_{header.name.name.screaming_snake_case.safe_name}"',
                     ),
                     header_key=header.name.wire_value,
+                    environment_variable=header.env,
                 )
+            )
+
+        if exclude_auth:
+            return ConstructorInfo(
+                constructor_parameters=parameters,
+                literal_headers=literal_headers,
             )
 
         # TODO(dsinghvi): Support suppliers for header auth schemes
@@ -480,6 +519,18 @@ class ClientWrapperGenerator:
                     environment_variable=bearer_auth_scheme.token_env_var.get_as_str()
                     if bearer_auth_scheme.token_env_var is not None
                     else None,
+                    template=TemplateGenerator.string_template(
+                        is_optional=False,
+                        template_string_prefix=constructor_parameter_name,
+                        inputs=[
+                            TemplateInput.factory.payload(
+                                PayloadInput(
+                                    location="AUTH",
+                                    path="token",
+                                )
+                            )
+                        ],
+                    ),
                 )
             )
 
@@ -517,6 +568,18 @@ class ClientWrapperGenerator:
                 if basic_auth_scheme.username_env_var is not None
                 else None,
                 is_basic=True,
+                template=TemplateGenerator.string_template(
+                    is_optional=False,
+                    template_string_prefix=username_constructor_parameter_name,
+                    inputs=[
+                        TemplateInput.factory.payload(
+                            PayloadInput(
+                                location="AUTH",
+                                path="username",
+                            )
+                        ),
+                    ],
+                ),
             )
             password_constructor_parameter_name = self._get_password_constructor_parameter_name(basic_auth_scheme)
             password_constructor_parameter = ConstructorParameter(
@@ -550,6 +613,18 @@ class ClientWrapperGenerator:
                 environment_variable=basic_auth_scheme.password_env_var.get_as_str()
                 if basic_auth_scheme.password_env_var is not None
                 else None,
+                template=TemplateGenerator.string_template(
+                    is_optional=False,
+                    template_string_prefix=password_constructor_parameter_name,
+                    inputs=[
+                        TemplateInput.factory.payload(
+                            PayloadInput(
+                                location="AUTH",
+                                path="password",
+                            )
+                        ),
+                    ],
+                ),
             )
             parameters.extend(
                 [
@@ -590,6 +665,38 @@ class ClientWrapperGenerator:
             scheme_as_union = scheme.get_as_union()
             if scheme_as_union.type == "bearer":
                 return scheme_as_union
+
+        for scheme in self._context.ir.auth.schemes:
+            scheme_as_union = scheme.get_as_union()
+            if scheme_as_union.type == "oauth":
+                # TODO: For now, we create the default bearer auth scheme if the auth scheme is oauth.
+                #
+                #       This should be eventually be handled in the IR when we can support multiple auth
+                #       schemes.
+                #
+                # TODO: We need to support the token prefix. This will actually need to be handled as a
+                #       custom header auth scheme.
+                return ir_types.BearerAuthScheme(
+                    token=ir_types.Name(
+                        original_name="token",
+                        camel_case=ir_types.SafeAndUnsafeString(
+                            safe_name="token",
+                            unsafe_name="token",
+                        ),
+                        pascal_case=ir_types.SafeAndUnsafeString(
+                            safe_name="Token",
+                            unsafe_name="Token",
+                        ),
+                        snake_case=ir_types.SafeAndUnsafeString(
+                            safe_name="token",
+                            unsafe_name="token",
+                        ),
+                        screaming_snake_case=ir_types.SafeAndUnsafeString(
+                            safe_name="TOKEN",
+                            unsafe_name="TOKEN",
+                        ),
+                    )
+                )
         return None
 
     def _has_basic_auth(self) -> bool:
@@ -638,19 +745,19 @@ class ClientWrapperGenerator:
         return header_auth_schemes
 
     def _get_header_parameter_name(self, header: ir_types.HttpHeader) -> str:
-        return header.name.name.snake_case.unsafe_name
+        return header.name.name.snake_case.safe_name
 
     def _get_header_private_member_name(self, header: ir_types.HttpHeader) -> str:
         return "_" + header.name.name.snake_case.unsafe_name
 
     def _get_header_constructor_parameter_name(self, header: ir_types.HttpHeader) -> str:
-        return header.name.name.snake_case.unsafe_name
+        return header.name.name.snake_case.safe_name
 
     def _get_auth_scheme_header_constructor_parameter_name(self, header: ir_types.HeaderAuthScheme) -> str:
-        return header.name.name.snake_case.unsafe_name
+        return header.name.name.snake_case.safe_name
 
     def _get_auth_scheme_header_private_member_name(self, header: ir_types.HeaderAuthScheme) -> str:
-        return header.name.name.snake_case.unsafe_name
+        return header.name.name.snake_case.safe_name
 
     def _get_environment_instantiation(
         self,

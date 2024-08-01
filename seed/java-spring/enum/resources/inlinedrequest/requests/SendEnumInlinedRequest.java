@@ -15,22 +15,48 @@ import java.lang.Object;
 import java.lang.String;
 import java.util.Objects;
 import java.util.Optional;
+import types.ColorOrOperand;
 import types.Operand;
 
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(
     builder = SendEnumInlinedRequest.Builder.class
 )
 public final class SendEnumInlinedRequest {
-  private final Optional<Operand> value;
+  private final Operand operand;
 
-  private SendEnumInlinedRequest(Optional<Operand> value) {
-    this.value = value;
+  private final Optional<Operand> maybeOperand;
+
+  private final ColorOrOperand operandOrColor;
+
+  private final Optional<ColorOrOperand> maybeOperandOrColor;
+
+  private SendEnumInlinedRequest(Operand operand, Optional<Operand> maybeOperand,
+      ColorOrOperand operandOrColor, Optional<ColorOrOperand> maybeOperandOrColor) {
+    this.operand = operand;
+    this.maybeOperand = maybeOperand;
+    this.operandOrColor = operandOrColor;
+    this.maybeOperandOrColor = maybeOperandOrColor;
   }
 
-  @JsonProperty("value")
-  public Optional<Operand> getValue() {
-    return value;
+  @JsonProperty("operand")
+  public Operand getOperand() {
+    return operand;
+  }
+
+  @JsonProperty("maybeOperand")
+  public Optional<Operand> getMaybeOperand() {
+    return maybeOperand;
+  }
+
+  @JsonProperty("operandOrColor")
+  public ColorOrOperand getOperandOrColor() {
+    return operandOrColor;
+  }
+
+  @JsonProperty("maybeOperandOrColor")
+  public Optional<ColorOrOperand> getMaybeOperandOrColor() {
+    return maybeOperandOrColor;
   }
 
   @java.lang.Override
@@ -40,12 +66,12 @@ public final class SendEnumInlinedRequest {
   }
 
   private boolean equalTo(SendEnumInlinedRequest other) {
-    return value.equals(other.value);
+    return operand.equals(other.operand) && maybeOperand.equals(other.maybeOperand) && operandOrColor.equals(other.operandOrColor) && maybeOperandOrColor.equals(other.maybeOperandOrColor);
   }
 
   @java.lang.Override
   public int hashCode() {
-    return Objects.hash(this.value);
+    return Objects.hash(this.operand, this.maybeOperand, this.operandOrColor, this.maybeOperandOrColor);
   }
 
   @java.lang.Override
@@ -53,40 +79,105 @@ public final class SendEnumInlinedRequest {
     return ObjectMappers.stringify(this);
   }
 
-  public static Builder builder() {
+  public static OperandStage builder() {
     return new Builder();
+  }
+
+  public interface OperandStage {
+    OperandOrColorStage operand(Operand operand);
+
+    Builder from(SendEnumInlinedRequest other);
+  }
+
+  public interface OperandOrColorStage {
+    _FinalStage operandOrColor(ColorOrOperand operandOrColor);
+  }
+
+  public interface _FinalStage {
+    SendEnumInlinedRequest build();
+
+    _FinalStage maybeOperand(Optional<Operand> maybeOperand);
+
+    _FinalStage maybeOperand(Operand maybeOperand);
+
+    _FinalStage maybeOperandOrColor(Optional<ColorOrOperand> maybeOperandOrColor);
+
+    _FinalStage maybeOperandOrColor(ColorOrOperand maybeOperandOrColor);
   }
 
   @JsonIgnoreProperties(
       ignoreUnknown = true
   )
-  public static final class Builder {
-    private Optional<Operand> value = Optional.empty();
+  public static final class Builder implements OperandStage, OperandOrColorStage, _FinalStage {
+    private Operand operand;
+
+    private ColorOrOperand operandOrColor;
+
+    private Optional<ColorOrOperand> maybeOperandOrColor = Optional.empty();
+
+    private Optional<Operand> maybeOperand = Optional.empty();
 
     private Builder() {
     }
 
+    @java.lang.Override
     public Builder from(SendEnumInlinedRequest other) {
-      value(other.getValue());
+      operand(other.getOperand());
+      maybeOperand(other.getMaybeOperand());
+      operandOrColor(other.getOperandOrColor());
+      maybeOperandOrColor(other.getMaybeOperandOrColor());
       return this;
     }
 
+    @java.lang.Override
+    @JsonSetter("operand")
+    public OperandOrColorStage operand(Operand operand) {
+      this.operand = operand;
+      return this;
+    }
+
+    @java.lang.Override
+    @JsonSetter("operandOrColor")
+    public _FinalStage operandOrColor(ColorOrOperand operandOrColor) {
+      this.operandOrColor = operandOrColor;
+      return this;
+    }
+
+    @java.lang.Override
+    public _FinalStage maybeOperandOrColor(ColorOrOperand maybeOperandOrColor) {
+      this.maybeOperandOrColor = Optional.ofNullable(maybeOperandOrColor);
+      return this;
+    }
+
+    @java.lang.Override
     @JsonSetter(
-        value = "value",
+        value = "maybeOperandOrColor",
         nulls = Nulls.SKIP
     )
-    public Builder value(Optional<Operand> value) {
-      this.value = value;
+    public _FinalStage maybeOperandOrColor(Optional<ColorOrOperand> maybeOperandOrColor) {
+      this.maybeOperandOrColor = maybeOperandOrColor;
       return this;
     }
 
-    public Builder value(Operand value) {
-      this.value = Optional.of(value);
+    @java.lang.Override
+    public _FinalStage maybeOperand(Operand maybeOperand) {
+      this.maybeOperand = Optional.ofNullable(maybeOperand);
       return this;
     }
 
+    @java.lang.Override
+    @JsonSetter(
+        value = "maybeOperand",
+        nulls = Nulls.SKIP
+    )
+    public _FinalStage maybeOperand(Optional<Operand> maybeOperand) {
+      this.maybeOperand = maybeOperand;
+      return this;
+    }
+
+    @java.lang.Override
     public SendEnumInlinedRequest build() {
-      return new SendEnumInlinedRequest(value);
+      return new SendEnumInlinedRequest(operand, maybeOperand, operandOrColor, maybeOperandOrColor);
     }
   }
 }

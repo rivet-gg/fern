@@ -6,6 +6,8 @@ import { GeneratedSdkInlinedRequestBodySchemaImpl } from "./GeneratedSdkInlinedR
 export declare namespace SdkInlinedRequestBodySchemaGenerator {
     export interface Init {
         includeSerdeLayer: boolean;
+        allowExtraFields: boolean;
+        omitUndefined: boolean;
     }
 
     export namespace generateInlinedRequestBodySchema {
@@ -19,9 +21,13 @@ export declare namespace SdkInlinedRequestBodySchemaGenerator {
 
 export class SdkInlinedRequestBodySchemaGenerator {
     private includeSerdeLayer: boolean;
+    private allowExtraFields: boolean;
+    private omitUndefined: boolean;
 
-    constructor({ includeSerdeLayer }: SdkInlinedRequestBodySchemaGenerator.Init) {
+    constructor({ includeSerdeLayer, allowExtraFields, omitUndefined }: SdkInlinedRequestBodySchemaGenerator.Init) {
         this.includeSerdeLayer = includeSerdeLayer;
+        this.allowExtraFields = allowExtraFields;
+        this.omitUndefined = omitUndefined;
     }
 
     public generateInlinedRequestBodySchema({
@@ -37,7 +43,9 @@ export class SdkInlinedRequestBodySchemaGenerator {
             endpoint,
             inlinedRequestBody: endpoint.requestBody,
             typeName,
-            includeSerdeLayer: this.includeSerdeLayer
+            includeSerdeLayer: this.includeSerdeLayer,
+            allowExtraFields: this.allowExtraFields,
+            omitUndefined: this.omitUndefined
         });
     }
 }

@@ -3,8 +3,8 @@
  */
 
 import * as core from "../../../../../../core";
-import * as Fiddle from "../../../../..";
-import * as serializers from "../../../../../../serialization";
+import * as Fiddle from "../../../../../index";
+import * as serializers from "../../../../../../serialization/index";
 import urlJoin from "url-join";
 
 export declare namespace Enum {
@@ -14,14 +14,25 @@ export declare namespace Enum {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class Enum {
     constructor(protected readonly _options: Enum.Options) {}
 
+    /**
+     * @param {Fiddle.types.WeatherReport} request
+     * @param {Enum.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.endpoints.enum.getAndReturnEnum(Fiddle.types.WeatherReport.Sunny)
+     */
     public async getAndReturnEnum(
         request: Fiddle.types.WeatherReport,
         requestOptions?: Enum.RequestOptions
@@ -32,18 +43,22 @@ export class Enum {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.types.WeatherReport.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            requestType: "json",
+            body: serializers.types.WeatherReport.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.types.WeatherReport.parseOrThrow(_response.body, {
+                body: serializers.types.WeatherReport.parseOrThrow(_response.body, {
                     unrecognizedObjectKeys: "passthrough",
                     allowUnrecognizedUnionMembers: true,
                     allowUnrecognizedEnumValues: true,
@@ -58,7 +73,7 @@ export class Enum {
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

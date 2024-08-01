@@ -5,10 +5,16 @@ types:
     properties:
       irVersion: string
       language: optional<Language>
+      defaultCustomConfig: optional<map<string, unknown>>
       defaultOutputMode: OutputMode
       generatorType: GeneratorType
       docker: string
       dockerCommand: optional<DockerCommand>
+      local: optional<LocalBuildInfo>
+      customFixtureConfig: 
+        type: optional<FixtureConfigurations>
+        docs: |
+          Configuration that will be used for any custom fixture specified by --custom-fixture
       fixtures:
         type: optional<map<string, list<FixtureConfigurations>>>
       scripts: optional<list<ScriptConfig>>
@@ -18,6 +24,27 @@ types:
           List any fixtures that are okay to fail. For normal fixtures 
           just list the fixture name. For configured fixture list {fixture}:{outputFolder}.
       features: optional<features.GeneratorFeatures>
+  
+  LocalBuildInfo: 
+    properties: 
+      workingDirectory: 
+        type: string
+        docs: | 
+          The working directory for the generator. 
+      buildCommand: 
+        type: list<string>
+        docs: | 
+          The command to build the generator locally. 
+          `yarn workspace @fern-api/openapi-generator build` for example. 
+      runCommand:
+        type: string
+        docs: | 
+          The command to run the generator locally. 
+          `node generators/openapi/dist/cli.cjs` for example.
+      env: 
+        type: optional<map<string, string>>
+        docs: | 
+          Environment variables to set when running the generator locally.
 
   DockerCommand: 
     discriminated: false
@@ -37,6 +64,8 @@ types:
       - typescript
       - go
       - ruby
+      - csharp
+      - swift
 
   GeneratorType:
     enum:
@@ -47,12 +76,35 @@ types:
 
   FixtureConfigurations:
     properties:
+      publishConfig: unknown
+      publishMetadata: unknown
       customConfig: unknown
+      readmeConfig: optional<ReadmeConfig>
+      audiences: optional<list<string>>
       outputFolder: string
       outputVersion: optional<string>
       outputMode: 
         type: optional<OutputMode>
         docs: Overrides the default output mode
+
+  ReadmeConfig:
+    properties:
+      defaultEndpoint: optional<ReadmeEndpoint>
+      bannerLink: optional<string>
+      apiReferenceLink: optional<string>
+      features: optional<map<string, list<ReadmeEndpoint>>>
+
+  ReadmeEndpoint:
+    discriminated: false
+    union: 
+      - string
+      - ReadmeEndpointObject
+
+  ReadmeEndpointObject:
+    properties:
+      method: string
+      path: string
+      stream: optional<boolean>
   
   OutputMode: 
     enum: 

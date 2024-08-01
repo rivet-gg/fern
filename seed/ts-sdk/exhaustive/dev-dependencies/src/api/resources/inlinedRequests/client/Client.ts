@@ -3,8 +3,8 @@
  */
 
 import * as core from "../../../../core";
-import * as Fiddle from "../../..";
-import * as serializers from "../../../../serialization";
+import * as Fiddle from "../../../index";
+import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
 
 export declare namespace InlinedRequests {
@@ -14,8 +14,12 @@ export declare namespace InlinedRequests {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
@@ -24,6 +28,32 @@ export class InlinedRequests {
 
     /**
      * POST with custom object in request body, response is an object
+     *
+     * @param {Fiddle.PostWithObjectBody} request
+     * @param {InlinedRequests.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.inlinedRequests.postWithObjectBodyandResponse({
+     *         string: "string",
+     *         integer: 1,
+     *         nestedObject: {
+     *             string: "string",
+     *             integer: 1,
+     *             long: 1000000,
+     *             double: 1.1,
+     *             bool: true,
+     *             datetime: new Date("2024-01-15T09:30:00.000Z"),
+     *             date: "2023-01-15",
+     *             uuid: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             base64: "SGVsbG8gd29ybGQh",
+     *             list: ["string"],
+     *             set: new Set(["string"]),
+     *             map: {
+     *                 1: "string"
+     *             },
+     *             bigint: "123456789123456789"
+     *         }
+     *     })
      */
     public async postWithObjectBodyandResponse(
         request: Fiddle.PostWithObjectBody,
@@ -40,18 +70,22 @@ export class InlinedRequests {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/exhaustive",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.PostWithObjectBody.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            requestType: "json",
+            body: serializers.PostWithObjectBody.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: await serializers.types.ObjectWithOptionalField.parseOrThrow(_response.body, {
+                body: serializers.types.ObjectWithOptionalField.parseOrThrow(_response.body, {
                     unrecognizedObjectKeys: "passthrough",
                     allowUnrecognizedUnionMembers: true,
                     allowUnrecognizedEnumValues: true,
@@ -66,7 +100,7 @@ export class InlinedRequests {
                     return {
                         ok: false,
                         error: Fiddle.inlinedRequests.postWithObjectBodyandResponse.Error.badRequestBody(
-                            await serializers.BadObjectRequestInfo.parseOrThrow(_response.error.body, {
+                            serializers.BadObjectRequestInfo.parseOrThrow(_response.error.body, {
                                 unrecognizedObjectKeys: "passthrough",
                                 allowUnrecognizedUnionMembers: true,
                                 allowUnrecognizedEnumValues: true,
@@ -83,7 +117,7 @@ export class InlinedRequests {
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

@@ -1,5 +1,129 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`x-fern-sdk-group-name-with-streaming x-fern-sdk-group-name-with-streaming docs 1`] = `
+{
+  "definitionFiles": {
+    "user.yml": {
+      "imports": {
+        "root": "__package__.yml",
+      },
+      "service": {
+        "auth": false,
+        "base-path": "",
+        "endpoints": {
+          "get": {
+            "auth": false,
+            "docs": undefined,
+            "examples": [
+              {
+                "path-parameters": {
+                  "userId": "userId",
+                },
+                "request": {
+                  "stream": false,
+                },
+                "response": {
+                  "body": {
+                    "id": "id",
+                    "streamed": false,
+                  },
+                },
+              },
+            ],
+            "method": "GET",
+            "pagination": undefined,
+            "path": "/user/{userId}",
+            "path-parameters": {
+              "userId": "string",
+            },
+            "request": {
+              "body": {
+                "properties": {
+                  "stream": "literal<false>",
+                },
+              },
+              "headers": undefined,
+              "name": "UserGetRequest",
+              "query-parameters": undefined,
+            },
+            "response": {
+              "docs": "",
+              "type": "root.User",
+            },
+          },
+          "get_stream": {
+            "auth": false,
+            "docs": undefined,
+            "method": "GET",
+            "pagination": undefined,
+            "path": "/user/{userId}",
+            "path-parameters": {
+              "userId": "string",
+            },
+            "request": {
+              "body": {
+                "properties": {
+                  "stream": "literal<true>",
+                },
+              },
+              "headers": undefined,
+              "name": "UserGetStreamRequest",
+              "query-parameters": undefined,
+            },
+            "response-stream": {
+              "docs": "",
+              "format": "json",
+              "type": "root.StreamUser",
+            },
+          },
+        },
+      },
+    },
+  },
+  "packageMarkerFile": {
+    "types": {
+      "StreamUser": {
+        "docs": undefined,
+        "properties": {
+          "id": {
+            "type": "optional<string>",
+            "validation": {
+              "format": "uuid",
+              "maxLength": undefined,
+              "minLength": undefined,
+              "pattern": undefined,
+            },
+          },
+          "streamed": "optional<literal<true>>",
+        },
+      },
+      "User": {
+        "docs": undefined,
+        "properties": {
+          "id": {
+            "type": "optional<string>",
+            "validation": {
+              "format": "uuid",
+              "maxLength": undefined,
+              "minLength": undefined,
+              "pattern": undefined,
+            },
+          },
+          "streamed": "optional<literal<false>>",
+        },
+      },
+    },
+  },
+  "rootApiFile": {
+    "display-name": "Test extension \`x-fern-sdk-group-name\` alongside \`x-fern-streaming\`.",
+    "error-discrimination": {
+      "strategy": "status-code",
+    },
+    "name": "api",
+  },
+}
+`;
+
 exports[`x-fern-sdk-group-name-with-streaming x-fern-sdk-group-name-with-streaming simple 1`] = `
 {
   "definitionFiles": {
@@ -31,6 +155,7 @@ exports[`x-fern-sdk-group-name-with-streaming x-fern-sdk-group-name-with-streami
               },
             ],
             "method": "GET",
+            "pagination": undefined,
             "path": "/user/{userId}",
             "path-parameters": {
               "userId": "string",
@@ -54,6 +179,7 @@ exports[`x-fern-sdk-group-name-with-streaming x-fern-sdk-group-name-with-streami
             "auth": false,
             "docs": undefined,
             "method": "GET",
+            "pagination": undefined,
             "path": "/user/{userId}",
             "path-parameters": {
               "userId": "string",
@@ -70,6 +196,7 @@ exports[`x-fern-sdk-group-name-with-streaming x-fern-sdk-group-name-with-streami
             },
             "response-stream": {
               "docs": "",
+              "format": "json",
               "type": "root.StreamUser",
             },
           },
@@ -82,14 +209,30 @@ exports[`x-fern-sdk-group-name-with-streaming x-fern-sdk-group-name-with-streami
       "StreamUser": {
         "docs": undefined,
         "properties": {
-          "id": "optional<string>",
+          "id": {
+            "type": "optional<string>",
+            "validation": {
+              "format": "uuid",
+              "maxLength": undefined,
+              "minLength": undefined,
+              "pattern": undefined,
+            },
+          },
           "streamed": "optional<literal<true>>",
         },
       },
       "User": {
         "docs": undefined,
         "properties": {
-          "id": "optional<string>",
+          "id": {
+            "type": "optional<string>",
+            "validation": {
+              "format": "uuid",
+              "maxLength": undefined,
+              "minLength": undefined,
+              "pattern": undefined,
+            },
+          },
           "streamed": "optional<literal<false>>",
         },
       },

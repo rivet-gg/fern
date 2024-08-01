@@ -3,10 +3,10 @@
  */
 
 import * as core from "../../../../core";
-import * as SeedIdempotencyHeaders from "../../..";
-import * as serializers from "../../../../serialization";
+import * as SeedIdempotencyHeaders from "../../../index";
+import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
-import * as errors from "../../../../errors";
+import * as errors from "../../../../errors/index";
 
 export declare namespace Payment {
     interface Options {
@@ -15,8 +15,12 @@ export declare namespace Payment {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 
     interface IdempotentRequestOptions extends RequestOptions {
@@ -28,6 +32,16 @@ export declare namespace Payment {
 export class Payment {
     constructor(protected readonly _options: Payment.Options) {}
 
+    /**
+     * @param {SeedIdempotencyHeaders.CreatePaymentRequest} request
+     * @param {Payment.IdempotentRequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.payment.create({
+     *         amount: 1,
+     *         currency: SeedIdempotencyHeaders.Currency.Usd
+     *     })
+     */
     public async create(
         request: SeedIdempotencyHeaders.CreatePaymentRequest,
         requestOptions?: Payment.IdempotentRequestOptions
@@ -38,18 +52,22 @@ export class Payment {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/idempotency-headers",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
                 "Idempotency-Key": requestOptions?.idempotencyKey,
                 "Idempotency-Expiration": requestOptions?.idempotencyExpiration.toString(),
             },
             contentType: "application/json",
-            body: await serializers.CreatePaymentRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            requestType: "json",
+            body: serializers.CreatePaymentRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return await serializers.payment.create.Response.parseOrThrow(_response.body, {
+            return serializers.payment.create.Response.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -79,19 +97,33 @@ export class Payment {
         }
     }
 
+    /**
+     * @param {string} paymentId
+     * @param {Payment.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.payment.delete("string")
+     */
     public async delete(paymentId: string, requestOptions?: Payment.RequestOptions): Promise<void> {
         const _response = await core.fetcher({
-            url: urlJoin(await core.Supplier.get(this._options.environment), `/payment/${paymentId}`),
+            url: urlJoin(
+                await core.Supplier.get(this._options.environment),
+                `/payment/${encodeURIComponent(paymentId)}`
+            ),
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/idempotency-headers",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -119,7 +151,7 @@ export class Payment {
         }
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string> {
         return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

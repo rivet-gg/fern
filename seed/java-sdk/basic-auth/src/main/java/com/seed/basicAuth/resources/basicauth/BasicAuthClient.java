@@ -3,17 +3,24 @@
  */
 package com.seed.basicAuth.resources.basicauth;
 
-import com.seed.basicAuth.core.ApiError;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.seed.basicAuth.core.ClientOptions;
 import com.seed.basicAuth.core.MediaTypes;
 import com.seed.basicAuth.core.ObjectMappers;
 import com.seed.basicAuth.core.RequestOptions;
+import com.seed.basicAuth.core.SeedBasicAuthApiException;
+import com.seed.basicAuth.core.SeedBasicAuthException;
+import com.seed.basicAuth.resources.errors.errors.BadRequest;
+import com.seed.basicAuth.resources.errors.errors.UnauthorizedRequest;
+import com.seed.basicAuth.resources.errors.types.UnauthorizedRequestErrorBody;
 import java.io.IOException;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class BasicAuthClient {
     protected final ClientOptions clientOptions;
@@ -43,17 +50,30 @@ public class BasicAuthClient {
                 .headers(Headers.of(clientOptions.headers(requestOptions)))
                 .addHeader("Content-Type", "application/json")
                 .build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
-                return ObjectMappers.JSON_MAPPER.readValue(response.body().string(), boolean.class);
+                return ObjectMappers.JSON_MAPPER.readValue(responseBody.string(), boolean.class);
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            try {
+                if (response.code() == 401) {
+                    throw new UnauthorizedRequest(ObjectMappers.JSON_MAPPER.readValue(
+                            responseBodyString, UnauthorizedRequestErrorBody.class));
+                }
+            } catch (JsonProcessingException ignored) {
+                // unable to map error response, throwing generic error
+            }
+            throw new SeedBasicAuthApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedBasicAuthException("Network error executing HTTP request", e);
         }
     }
 
@@ -76,8 +96,8 @@ public class BasicAuthClient {
         try {
             body = RequestBody.create(
                     ObjectMappers.JSON_MAPPER.writeValueAsBytes(request), MediaTypes.APPLICATION_JSON);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            throw new SeedBasicAuthException("Failed to serialize request", e);
         }
         Request okhttpRequest = new Request.Builder()
                 .url(httpUrl)
@@ -85,17 +105,33 @@ public class BasicAuthClient {
                 .headers(Headers.of(clientOptions.headers(requestOptions)))
                 .addHeader("Content-Type", "application/json")
                 .build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
-                return ObjectMappers.JSON_MAPPER.readValue(response.body().string(), boolean.class);
+                return ObjectMappers.JSON_MAPPER.readValue(responseBody.string(), boolean.class);
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            try {
+                switch (response.code()) {
+                    case 400:
+                        throw new BadRequest(ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
+                    case 401:
+                        throw new UnauthorizedRequest(ObjectMappers.JSON_MAPPER.readValue(
+                                responseBodyString, UnauthorizedRequestErrorBody.class));
+                }
+            } catch (JsonProcessingException ignored) {
+                // unable to map error response, throwing generic error
+            }
+            throw new SeedBasicAuthApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedBasicAuthException("Network error executing HTTP request", e);
         }
     }
 }

@@ -1,0 +1,20 @@
+using System.Text.Json.Serialization;
+
+#nullable enable
+
+namespace SeedTrace.V2;
+
+public record FileInfoV2
+{
+    [JsonPropertyName("filename")]
+    public required string Filename { get; set; }
+
+    [JsonPropertyName("directory")]
+    public required string Directory { get; set; }
+
+    [JsonPropertyName("contents")]
+    public required string Contents { get; set; }
+
+    [JsonPropertyName("editable")]
+    public required bool Editable { get; set; }
+}

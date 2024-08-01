@@ -56,6 +56,7 @@ export function createDefinitionFileAstVisitorForRules({
         ...createAstNodeVisitor("httpEndpoint"),
         ...createAstNodeVisitor("pathParameter"),
         ...createAstNodeVisitor("queryParameter"),
+        ...createAstNodeVisitor("streamCondition"),
         ...createAstNodeVisitor("header"),
         ...createAstNodeVisitor("errorDeclaration"),
         ...createAstNodeVisitor("errorReference"),
@@ -71,6 +72,7 @@ export function createDefinitionFileAstVisitorForRules({
         ...createAstNodeVisitor("variableReference"),
         ...createAstNodeVisitor("extension"),
         ...createAstNodeVisitor("serviceBaseUrl"),
-        ...createAstNodeVisitor("endpointBaseUrl")
+        ...createAstNodeVisitor("endpointBaseUrl"),
+        ...createAstNodeVisitor("exampleError")
     };
 }

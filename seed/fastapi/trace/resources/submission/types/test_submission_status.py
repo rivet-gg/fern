@@ -2,52 +2,93 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ....core.datetime_utils import serialize_datetime
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, UniversalRootModel, update_forward_refs
 from .error_info import ErrorInfo
 from .running_submission_state import RunningSubmissionState
 from .submission_status_for_test_case import SubmissionStatusForTestCase
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def stopped(self) -> TestSubmissionStatus:
-        return TestSubmissionStatus(__root__=_TestSubmissionStatus.Stopped(type="stopped"))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionStatus(root=_TestSubmissionStatus.Stopped(type="stopped"))
+        else:
+            return TestSubmissionStatus(__root__=_TestSubmissionStatus.Stopped(type="stopped"))
 
     def errored(self, value: ErrorInfo) -> TestSubmissionStatus:
-        return TestSubmissionStatus(__root__=_TestSubmissionStatus.Errored(type="errored", value=value))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionStatus(root=_TestSubmissionStatus.Errored(type="errored", value=value))
+        else:
+            return TestSubmissionStatus(__root__=_TestSubmissionStatus.Errored(type="errored", value=value))
 
     def running(self, value: RunningSubmissionState) -> TestSubmissionStatus:
-        return TestSubmissionStatus(__root__=_TestSubmissionStatus.Running(type="running", value=value))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionStatus(root=_TestSubmissionStatus.Running(type="running", value=value))
+        else:
+            return TestSubmissionStatus(__root__=_TestSubmissionStatus.Running(type="running", value=value))
 
     def test_case_id_to_state(self, value: typing.Dict[str, SubmissionStatusForTestCase]) -> TestSubmissionStatus:
-        return TestSubmissionStatus(
-            __root__=_TestSubmissionStatus.TestCaseIdToState(type="testCaseIdToState", value=value)
-        )
+        if IS_PYDANTIC_V2:
+            return TestSubmissionStatus(
+                root=_TestSubmissionStatus.TestCaseIdToState(type="testCaseIdToState", value=value)
+            )
+        else:
+            return TestSubmissionStatus(
+                __root__=_TestSubmissionStatus.TestCaseIdToState(type="testCaseIdToState", value=value)
+            )
 
 
-class TestSubmissionStatus(pydantic.BaseModel):
+class TestSubmissionStatus(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(
-        self,
-    ) -> typing.Union[
-        _TestSubmissionStatus.Stopped,
-        _TestSubmissionStatus.Errored,
-        _TestSubmissionStatus.Running,
-        _TestSubmissionStatus.TestCaseIdToState,
-    ]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[
+                _TestSubmissionStatus.Stopped,
+                _TestSubmissionStatus.Errored,
+                _TestSubmissionStatus.Running,
+                _TestSubmissionStatus.TestCaseIdToState,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _TestSubmissionStatus.Stopped,
+            _TestSubmissionStatus.Errored,
+            _TestSubmissionStatus.Running,
+            _TestSubmissionStatus.TestCaseIdToState,
+        ]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[
+                _TestSubmissionStatus.Stopped,
+                _TestSubmissionStatus.Errored,
+                _TestSubmissionStatus.Running,
+                _TestSubmissionStatus.TestCaseIdToState,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _TestSubmissionStatus.Stopped,
+            _TestSubmissionStatus.Errored,
+            _TestSubmissionStatus.Running,
+            _TestSubmissionStatus.TestCaseIdToState,
+        ]:
+            return self.__root__
 
     def visit(
         self,
@@ -56,53 +97,32 @@ class TestSubmissionStatus(pydantic.BaseModel):
         running: typing.Callable[[RunningSubmissionState], T_Result],
         test_case_id_to_state: typing.Callable[[typing.Dict[str, SubmissionStatusForTestCase]], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "stopped":
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "stopped":
             return stopped()
-        if self.__root__.type == "errored":
-            return errored(self.__root__.value)
-        if self.__root__.type == "running":
-            return running(self.__root__.value)
-        if self.__root__.type == "testCaseIdToState":
-            return test_case_id_to_state(self.__root__.value)
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[
-            _TestSubmissionStatus.Stopped,
-            _TestSubmissionStatus.Errored,
-            _TestSubmissionStatus.Running,
-            _TestSubmissionStatus.TestCaseIdToState,
-        ],
-        pydantic.Field(discriminator="type"),
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        if unioned_value.type == "errored":
+            return errored(unioned_value.value)
+        if unioned_value.type == "running":
+            return running(unioned_value.value)
+        if unioned_value.type == "testCaseIdToState":
+            return test_case_id_to_state(unioned_value.value)
 
 
 class _TestSubmissionStatus:
-    class Stopped(pydantic.BaseModel):
-        type: typing_extensions.Literal["stopped"]
+    class Stopped(UniversalBaseModel):
+        type: typing.Literal["stopped"] = "stopped"
 
-    class Errored(pydantic.BaseModel):
-        type: typing_extensions.Literal["errored"]
+    class Errored(UniversalBaseModel):
+        type: typing.Literal["errored"] = "errored"
         value: ErrorInfo
 
-    class Running(pydantic.BaseModel):
-        type: typing_extensions.Literal["running"]
+    class Running(UniversalBaseModel):
+        type: typing.Literal["running"] = "running"
         value: RunningSubmissionState
 
-    class TestCaseIdToState(pydantic.BaseModel):
-        type: typing_extensions.Literal["testCaseIdToState"]
+    class TestCaseIdToState(UniversalBaseModel):
+        type: typing.Literal["testCaseIdToState"] = "testCaseIdToState"
         value: typing.Dict[str, SubmissionStatusForTestCase]
 
 
-TestSubmissionStatus.update_forward_refs()
+update_forward_refs(TestSubmissionStatus)

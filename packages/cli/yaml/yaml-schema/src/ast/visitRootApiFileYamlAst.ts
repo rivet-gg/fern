@@ -9,12 +9,15 @@ export async function visitRootApiFileYamlAst(
 ): Promise<void> {
     await visitor.file?.(contents, []);
     await visitObject(contents, {
+        version: noop,
         name: noop,
+        "default-url": noop,
         "display-name": noop,
         imports: noop,
         auth: noop,
         "idempotency-headers": noop,
         "auth-schemes": noop,
+        pagination: noop,
         "default-environment": async (defaultEnvironment) => {
             await visitor.defaultEnvironment?.(defaultEnvironment, ["default-environment"]);
         },

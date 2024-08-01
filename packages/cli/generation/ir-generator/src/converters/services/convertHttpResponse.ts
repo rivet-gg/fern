@@ -1,10 +1,15 @@
 import { assertNever } from "@fern-api/core-utils";
-import { HttpResponse, JsonResponse, ObjectProperty, StreamingResponseChunkType } from "@fern-api/ir-sdk";
+import {
+    HttpResponse,
+    HttpResponseBody,
+    JsonResponse,
+    NonStreamHttpResponseBody,
+    StreamingResponse
+} from "@fern-api/ir-sdk";
 import { isRawTextType, parseRawFileType, parseRawTextType, RawSchemas } from "@fern-api/yaml-schema";
 import { FernFileContext } from "../../FernFileContext";
-import { ResolvedType } from "../../resolvers/ResolvedType";
 import { TypeResolver } from "../../resolvers/TypeResolver";
-import { getObjectPropertiesFromRawObjectSchema } from "../type-declarations/convertObjectTypeDeclaration";
+import { getObjectPropertyFromResolvedType } from "./getObjectPropertyFromResolvedType";
 
 export async function convertHttpResponse({
     endpoint,
@@ -15,18 +20,92 @@ export async function convertHttpResponse({
     file: FernFileContext;
     typeResolver: TypeResolver;
 }): Promise<HttpResponse | undefined> {
-    const { response, ["response-stream"]: responseStream } = endpoint;
+    const responseBody = await convertHttpResponseBody({
+        endpoint,
+        file,
+        typeResolver
+    });
+    return {
+        body: responseBody,
+        statusCode: typeof endpoint.response !== "string" ? endpoint.response?.["status-code"] : undefined
+    };
+}
+
+export async function convertHttpResponseBody({
+    endpoint,
+    file,
+    typeResolver
+}: {
+    endpoint: RawSchemas.HttpEndpointSchema;
+    file: FernFileContext;
+    typeResolver: TypeResolver;
+}): Promise<HttpResponseBody | undefined> {
+    const response = await convertNonStreamHttpResponseBody({
+        endpoint,
+        file,
+        typeResolver
+    });
+
+    const streamResponse = await convertStreamHttpResponseBody({
+        endpoint,
+        file,
+        typeResolver
+    });
+
+    if (response != null && streamResponse != null) {
+        let nonStreamResponse: NonStreamHttpResponseBody;
+        switch (response.type) {
+            case "fileDownload": {
+                nonStreamResponse = NonStreamHttpResponseBody.fileDownload({ ...response });
+                break;
+            }
+            case "json": {
+                nonStreamResponse = NonStreamHttpResponseBody.json({
+                    ...response.value
+                });
+                break;
+            }
+            case "text": {
+                nonStreamResponse = NonStreamHttpResponseBody.text({ ...response });
+                break;
+            }
+            default:
+                assertNever(response);
+        }
+        return HttpResponseBody.streamParameter({
+            nonStreamResponse,
+            streamResponse
+        });
+    } else if (response != null) {
+        return response;
+    } else if (streamResponse != null) {
+        return HttpResponseBody.streaming(streamResponse);
+    }
+
+    return undefined;
+}
+
+export async function convertNonStreamHttpResponseBody({
+    endpoint,
+    file,
+    typeResolver
+}: {
+    endpoint: RawSchemas.HttpEndpointSchema;
+    file: FernFileContext;
+    typeResolver: TypeResolver;
+}): Promise<HttpResponseBody.FileDownload | HttpResponseBody.Text | HttpResponseBody.Json | undefined> {
+    const { response } = endpoint;
 
     if (response != null) {
         const docs = typeof response !== "string" ? response.docs : undefined;
         const responseType = typeof response === "string" ? response : response.type;
 
         if (parseRawFileType(responseType) != null) {
-            return HttpResponse.fileDownload({
+            return HttpResponseBody.fileDownload({
                 docs
             });
         } else if (parseRawTextType(responseType) != null) {
-            return HttpResponse.text({
+            return HttpResponseBody.text({
                 docs
             });
         } else {
@@ -34,27 +113,44 @@ export async function convertHttpResponse({
         }
     }
 
-    if (responseStream != null) {
-        return HttpResponse.streaming({
-            docs: typeof responseStream !== "string" ? responseStream.docs : undefined,
-            dataEventType: constructStreamingResponseChunkType(responseStream, file),
-            terminator: typeof responseStream !== "string" ? responseStream.terminator : undefined
-        });
-    }
-
     return undefined;
 }
 
-function constructStreamingResponseChunkType(
-    responseStream: RawSchemas.HttpResponseStreamSchema | string,
-    file: FernFileContext
-): StreamingResponseChunkType {
-    const typeReference = typeof responseStream === "string" ? responseStream : responseStream.type;
-    if (isRawTextType(typeReference)) {
-        return StreamingResponseChunkType.text();
-    } else {
-        return StreamingResponseChunkType.json(file.parseTypeReference(typeReference));
+export async function convertStreamHttpResponseBody({
+    endpoint,
+    file,
+    typeResolver
+}: {
+    endpoint: RawSchemas.HttpEndpointSchema;
+    typeResolver: TypeResolver;
+    file: FernFileContext;
+}): Promise<StreamingResponse | undefined> {
+    const { ["response-stream"]: responseStream } = endpoint;
+
+    if (responseStream != null) {
+        const docs = typeof responseStream !== "string" ? responseStream.docs : undefined;
+        const typeReference = typeof responseStream === "string" ? responseStream : responseStream.type;
+        const streamFormat = typeof responseStream === "string" ? "json" : responseStream.format ?? "json";
+        if (isRawTextType(typeReference)) {
+            return StreamingResponse.text({
+                docs
+            });
+        } else if (typeof responseStream !== "string" && streamFormat === "sse") {
+            return StreamingResponse.sse({
+                docs,
+                payload: file.parseTypeReference(typeReference),
+                terminator: typeof responseStream !== "string" ? responseStream.terminator : undefined
+            });
+        } else {
+            return StreamingResponse.json({
+                docs,
+                payload: file.parseTypeReference(typeReference),
+                terminator: typeof responseStream !== "string" ? responseStream.terminator : undefined
+            });
+        }
     }
+
+    return undefined;
 }
 
 async function convertJsonResponse(
@@ -62,7 +158,7 @@ async function convertJsonResponse(
     docs: string | undefined,
     file: FernFileContext,
     typeResolver: TypeResolver
-): Promise<HttpResponse> {
+): Promise<HttpResponseBody.Json> {
     const responseBodyType = file.parseTypeReference(response);
     const resolvedType = typeResolver.resolveTypeOrThrow({
         type: typeof response !== "string" ? response.type : response,
@@ -70,129 +166,23 @@ async function convertJsonResponse(
     });
     const responseProperty = typeof response !== "string" ? response.property : undefined;
     if (responseProperty != null) {
-        return HttpResponse.json(
+        return HttpResponseBody.json(
             JsonResponse.nestedPropertyAsResponse({
                 docs,
                 responseBodyType,
-                responseProperty: await getObjectPropertyFromResolvedType(
-                    resolvedType,
-                    responseProperty,
+                responseProperty: await getObjectPropertyFromResolvedType({
+                    typeResolver,
                     file,
-                    typeResolver
-                )
+                    resolvedType,
+                    property: responseProperty
+                })
             })
         );
     }
-    return HttpResponse.json(
+    return HttpResponseBody.json(
         JsonResponse.response({
             docs,
             responseBodyType
         })
-    );
-}
-
-async function getObjectPropertyFromResolvedType(
-    resolvedType: ResolvedType,
-    property: string,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Promise<ObjectProperty> {
-    switch (resolvedType._type) {
-        case "container":
-            if (resolvedType.container._type === "optional") {
-                return await getObjectPropertyFromResolvedType(
-                    resolvedType.container.itemType,
-                    property,
-                    file,
-                    typeResolver
-                );
-            }
-            break;
-        case "named":
-            if (isRawObjectDefinition(resolvedType.declaration)) {
-                return await getObjectPropertyFromObjectSchema(
-                    resolvedType.declaration,
-                    property,
-                    resolvedType.file,
-                    typeResolver
-                );
-            }
-            break;
-        case "primitive":
-        case "unknown":
-            break;
-        default:
-            assertNever(resolvedType);
-    }
-    throw new Error("Internal error; response must be an object in order to return a property as a response");
-}
-
-async function getObjectPropertyFromObjectSchema(
-    objectSchema: RawSchemas.ObjectSchema,
-    property: string,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Promise<ObjectProperty> {
-    const properties = await getAllPropertiesForRawObjectSchema(objectSchema, file, typeResolver);
-    const objectProperty = properties[property];
-    if (objectProperty == null) {
-        throw new Error(`Response does not have a property named ${property}.`);
-    }
-    return objectProperty;
-}
-
-async function getAllPropertiesForRawObjectSchema(
-    objectSchema: RawSchemas.ObjectSchema,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Promise<Record<string, ObjectProperty>> {
-    let extendedTypes: string[] = [];
-    if (typeof objectSchema.extends === "string") {
-        extendedTypes = [objectSchema.extends];
-    } else if (Array.isArray(objectSchema.extends)) {
-        extendedTypes = objectSchema.extends;
-    }
-
-    const properties: Record<string, ObjectProperty> = {};
-    for (const extendedType of extendedTypes) {
-        const extendedProperties = await getAllPropertiesForExtendedType(extendedType, file, typeResolver);
-        Object.entries(extendedProperties).map(([propertyKey, objectProperty]) => {
-            properties[propertyKey] = objectProperty;
-        });
-    }
-
-    const objectProperties = await getObjectPropertiesFromRawObjectSchema(objectSchema, file);
-    objectProperties.forEach((objectProperty) => {
-        properties[objectProperty.name.name.originalName] = objectProperty;
-    });
-
-    return properties;
-}
-
-async function getAllPropertiesForExtendedType(
-    extendedType: string,
-    file: FernFileContext,
-    typeResolver: TypeResolver
-): Promise<Record<string, ObjectProperty>> {
-    const resolvedType = typeResolver.resolveNamedTypeOrThrow({
-        referenceToNamedType: extendedType,
-        file
-    });
-    if (resolvedType._type === "named" && isRawObjectDefinition(resolvedType.declaration)) {
-        return await getAllPropertiesForRawObjectSchema(resolvedType.declaration, file, typeResolver);
-    }
-    // This should be unreachable; extended types must be named objects.
-    throw new Error(`Extended type ${extendedType} must be another named type`);
-}
-type NamedDeclaration =
-    | RawSchemas.ObjectSchema
-    | RawSchemas.DiscriminatedUnionSchema
-    | RawSchemas.UndiscriminatedUnionSchema
-    | RawSchemas.EnumSchema;
-
-function isRawObjectDefinition(namedDeclaration: NamedDeclaration): namedDeclaration is RawSchemas.ObjectSchema {
-    return (
-        (namedDeclaration as RawSchemas.ObjectSchema).extends != null ||
-        (namedDeclaration as RawSchemas.ObjectSchema).properties != null
     );
 }

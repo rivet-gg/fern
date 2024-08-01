@@ -4,10 +4,10 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as SeedMultiUrlEnvironment from "../../..";
-import * as serializers from "../../../../serialization";
+import * as SeedMultiUrlEnvironment from "../../../index";
+import * as serializers from "../../../../serialization/index";
 import urlJoin from "url-join";
-import * as errors from "../../../../errors";
+import * as errors from "../../../../errors/index";
 
 export declare namespace S3 {
     interface Options {
@@ -18,14 +18,27 @@ export declare namespace S3 {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class S3 {
     constructor(protected readonly _options: S3.Options) {}
 
+    /**
+     * @param {SeedMultiUrlEnvironment.GetPresignedUrlRequest} request
+     * @param {S3.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.s3.getPresignedUrl({
+     *         s3Key: "string"
+     *     })
+     */
     public async getPresignedUrl(
         request: SeedMultiUrlEnvironment.GetPresignedUrlRequest,
         requestOptions?: S3.RequestOptions
@@ -42,16 +55,20 @@ export class S3 {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/multi-url-environment",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
-            body: await serializers.GetPresignedUrlRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            requestType: "json",
+            body: serializers.GetPresignedUrlRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return await serializers.s3.getPresignedUrl.Response.parseOrThrow(_response.body, {
+            return serializers.s3.getPresignedUrl.Response.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -81,7 +98,7 @@ export class S3 {
         }
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string> {
         return `Bearer ${await core.Supplier.get(this._options.token)}`;
     }
 }

@@ -133,7 +133,7 @@
               "_type": "endpoint",
               "name": "Get File",
               "request": {
-                "description": null,
+                "description": "This endpoint returns a file by its name.",
                 "url": {
                   "raw": "{{baseUrl}}/file/:filename",
                   "host": [
@@ -147,7 +147,7 @@
                   "variable": [
                     {
                       "key": "filename",
-                      "description": null,
+                      "description": "This is a filename",
                       "value": "file.txt"
                     }
                   ]
@@ -175,7 +175,7 @@
                   "status": "Not Found Error",
                   "code": 404,
                   "originalRequest": {
-                    "description": null,
+                    "description": "This endpoint returns a file by its name.",
                     "url": {
                       "raw": "{{baseUrl}}/file/:filename",
                       "host": [
@@ -189,7 +189,7 @@
                       "variable": [
                         {
                           "key": "filename",
-                          "description": null,
+                          "description": "This is a filename",
                           "value": "file.txt"
                         }
                       ]
@@ -235,7 +235,7 @@
               "_type": "endpoint",
               "name": "Check",
               "request": {
-                "description": null,
+                "description": "This endpoint checks the health of a resource.",
                 "url": {
                   "raw": "{{baseUrl}}/check/:id",
                   "host": [
@@ -249,7 +249,7 @@
                   "variable": [
                     {
                       "key": "id",
-                      "description": null,
+                      "description": "The id to check",
                       "value": "id-2sdx82h"
                     }
                   ]
@@ -271,7 +271,7 @@
                   "status": "OK",
                   "code": 200,
                   "originalRequest": {
-                    "description": null,
+                    "description": "This endpoint checks the health of a resource.",
                     "url": {
                       "raw": "{{baseUrl}}/check/:id",
                       "host": [
@@ -285,8 +285,47 @@
                       "variable": [
                         {
                           "key": "id",
-                          "description": null,
+                          "description": "The id to check",
                           "value": "id-2sdx82h"
+                        }
+                      ]
+                    },
+                    "header": [
+                      {
+                        "type": "text",
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "auth": null,
+                    "body": null
+                  },
+                  "description": null,
+                  "body": "",
+                  "_postman_previewlanguage": "json"
+                },
+                {
+                  "name": "Success",
+                  "status": "OK",
+                  "code": 200,
+                  "originalRequest": {
+                    "description": "This endpoint checks the health of a resource.",
+                    "url": {
+                      "raw": "{{baseUrl}}/check/:id",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        "check",
+                        ":id"
+                      ],
+                      "query": [],
+                      "variable": [
+                        {
+                          "key": "id",
+                          "description": "The id to check",
+                          "value": "id-3tey93i"
                         }
                       ]
                     },
@@ -311,7 +350,7 @@
               "_type": "endpoint",
               "name": "Ping",
               "request": {
-                "description": null,
+                "description": "This endpoint checks the health of the service.",
                 "url": {
                   "raw": "{{baseUrl}}/ping",
                   "host": [
@@ -340,7 +379,7 @@
                   "status": "OK",
                   "code": 200,
                   "originalRequest": {
-                    "description": null,
+                    "description": "This endpoint checks the health of the service.",
                     "url": {
                       "raw": "{{baseUrl}}/ping",
                       "host": [
@@ -449,7 +488,7 @@
                 "body": null
               },
               "description": null,
-              "body": "{\n    \"id\": \"movie-c06a4ad7\",\n    \"title\": \"The Boy and the Heron\",\n    \"from\": \"Hayao Miyazaki\",\n    \"rating\": 8,\n    \"type\": \"movie\",\n    \"tag\": \"tag-wf9as23d\"\n}",
+              "body": "{\n    \"id\": \"movie-c06a4ad7\",\n    \"prequel\": \"movie-cv9b914f\",\n    \"title\": \"The Boy and the Heron\",\n    \"from\": \"Hayao Miyazaki\",\n    \"rating\": 8,\n    \"type\": \"movie\",\n    \"tag\": \"tag-wf9as23d\",\n    \"metadata\": {\n        \"actors\": [\n            \"Christian Bale\",\n            \"Florence Pugh\",\n            \"Willem Dafoe\"\n        ],\n        \"releaseDate\": \"2023-12-08\",\n        \"ratings\": {\n            \"rottenTomatoes\": 97,\n            \"imdb\": 7.6\n        }\n    }\n}",
               "_postman_previewlanguage": "json"
             }
           ]
@@ -481,7 +520,7 @@
             "auth": null,
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"id\": \"movie-c06a4ad7\",\n    \"title\": \"The Boy and the Heron\",\n    \"from\": \"Hayao Miyazaki\",\n    \"rating\": 8,\n    \"type\": \"movie\",\n    \"tag\": \"tag-wf9as23d\"\n}",
+              "raw": "{\n    \"id\": \"movie-c06a4ad7\",\n    \"prequel\": \"movie-cv9b914f\",\n    \"title\": \"The Boy and the Heron\",\n    \"from\": \"Hayao Miyazaki\",\n    \"rating\": 8,\n    \"type\": \"movie\",\n    \"tag\": \"tag-wf9as23d\",\n    \"metadata\": {\n        \"actors\": [\n            \"Christian Bale\",\n            \"Florence Pugh\",\n            \"Willem Dafoe\"\n        ],\n        \"releaseDate\": \"2023-12-08\",\n        \"ratings\": {\n            \"rottenTomatoes\": 97,\n            \"imdb\": 7.6\n        }\n    }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -518,7 +557,7 @@
                 "auth": null,
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"id\": \"movie-c06a4ad7\",\n    \"title\": \"The Boy and the Heron\",\n    \"from\": \"Hayao Miyazaki\",\n    \"rating\": 8,\n    \"type\": \"movie\",\n    \"tag\": \"tag-wf9as23d\"\n}",
+                  "raw": "{\n    \"id\": \"movie-c06a4ad7\",\n    \"prequel\": \"movie-cv9b914f\",\n    \"title\": \"The Boy and the Heron\",\n    \"from\": \"Hayao Miyazaki\",\n    \"rating\": 8,\n    \"type\": \"movie\",\n    \"tag\": \"tag-wf9as23d\",\n    \"metadata\": {\n        \"actors\": [\n            \"Christian Bale\",\n            \"Florence Pugh\",\n            \"Willem Dafoe\"\n        ],\n        \"releaseDate\": \"2023-12-08\",\n        \"ratings\": {\n            \"rottenTomatoes\": 97,\n            \"imdb\": 7.6\n        }\n    }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -627,6 +666,68 @@
               "_postman_previewlanguage": "json"
             }
           ]
+        },
+        {
+          "_type": "endpoint",
+          "name": "Get Response",
+          "request": {
+            "description": null,
+            "url": {
+              "raw": "{{baseUrl}}/response",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "response"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "type": "text",
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": null
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "description": null,
+                "url": {
+                  "raw": "{{baseUrl}}/response",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "response"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "type": "text",
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "auth": null,
+                "body": null
+              },
+              "description": null,
+              "body": "{\n    \"response\": \"Initializing...\",\n    \"identifiers\": [\n        {\n            \"type\": \"primitive\",\n            \"value\": \"example\",\n            \"label\": \"Primitive\"\n        },\n        {\n            \"type\": \"unknown\",\n            \"value\": \"{}\",\n            \"label\": \"Unknown\"\n        }\n    ]\n}",
+              "_postman_previewlanguage": "json"
+            }
+          ]
         }
       ]
     },
@@ -655,7 +756,7 @@
         "auth": null,
         "body": {
           "mode": "raw",
-          "raw": "\"Hello world!\"",
+          "raw": "\"Hello world!\\\\n\\\\nwith\\\\n\\\\tnewlines\"",
           "options": {
             "raw": {
               "language": "json"
@@ -690,7 +791,7 @@
             "auth": null,
             "body": {
               "mode": "raw",
-              "raw": "\"Hello world!\"",
+              "raw": "\"Hello world!\\\\n\\\\nwith\\\\n\\\\tnewlines\"",
               "options": {
                 "raw": {
                   "language": "json"
@@ -699,7 +800,7 @@
             }
           },
           "description": null,
-          "body": "\"Hello world!\"",
+          "body": "\"Hello world!\\\\n\\\\nwith\\\\n\\\\tnewlines\"",
           "_postman_previewlanguage": "json"
         }
       ]

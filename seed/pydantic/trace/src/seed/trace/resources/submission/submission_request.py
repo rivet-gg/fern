@@ -4,49 +4,81 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .initialize_problem_request import InitializeProblemRequest
-from .stop_request import StopRequest
-from .submit_request_v_2 import SubmitRequestV2
-from .workspace_submit_request import WorkspaceSubmitRequest
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..commons.language import Language
+from ..commons.problem_id import ProblemId
+from .submission_file_info import SubmissionFileInfo
+from .submission_id import SubmissionId
 
 
-class SubmissionRequest_InitializeProblemRequest(InitializeProblemRequest):
-    type: typing_extensions.Literal["initializeProblemRequest"]
+class SubmissionRequest_InitializeProblemRequest(UniversalBaseModel):
+    type: typing.Literal["initializeProblemRequest"] = "initializeProblemRequest"
+    problem_id: ProblemId = pydantic.Field(alias="problemId")
+    problem_version: typing.Optional[int] = pydantic.Field(alias="problemVersion", default=None)
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
 
-
-class SubmissionRequest_InitializeWorkspaceRequest(pydantic.BaseModel):
-    type: typing_extensions.Literal["initializeWorkspaceRequest"]
-
-
-class SubmissionRequest_SubmitV2(SubmitRequestV2):
-    type: typing_extensions.Literal["submitV2"]
-
-    class Config:
-        allow_population_by_field_name = True
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class SubmissionRequest_WorkspaceSubmit(WorkspaceSubmitRequest):
-    type: typing_extensions.Literal["workspaceSubmit"]
+class SubmissionRequest_InitializeWorkspaceRequest(UniversalBaseModel):
+    type: typing.Literal["initializeWorkspaceRequest"] = "initializeWorkspaceRequest"
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class SubmissionRequest_Stop(StopRequest):
-    type: typing_extensions.Literal["stop"]
+class SubmissionRequest_SubmitV2(UniversalBaseModel):
+    type: typing.Literal["submitV2"] = "submitV2"
+    submission_id: SubmissionId = pydantic.Field(alias="submissionId")
+    language: Language
+    submission_files: typing.List[SubmissionFileInfo] = pydantic.Field(alias="submissionFiles")
+    problem_id: ProblemId = pydantic.Field(alias="problemId")
+    problem_version: typing.Optional[int] = pydantic.Field(alias="problemVersion", default=None)
+    user_id: typing.Optional[str] = pydantic.Field(alias="userId", default=None)
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class SubmissionRequest_WorkspaceSubmit(UniversalBaseModel):
+    type: typing.Literal["workspaceSubmit"] = "workspaceSubmit"
+    submission_id: SubmissionId = pydantic.Field(alias="submissionId")
+    language: Language
+    submission_files: typing.List[SubmissionFileInfo] = pydantic.Field(alias="submissionFiles")
+    user_id: typing.Optional[str] = pydantic.Field(alias="userId", default=None)
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class SubmissionRequest_Stop(UniversalBaseModel):
+    type: typing.Literal["stop"] = "stop"
+    submission_id: SubmissionId = pydantic.Field(alias="submissionId")
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 SubmissionRequest = typing.Union[

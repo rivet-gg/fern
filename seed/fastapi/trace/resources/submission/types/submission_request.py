@@ -2,23 +2,18 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ....core.datetime_utils import serialize_datetime
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, UniversalRootModel, update_forward_refs
 from .initialize_problem_request import (
     InitializeProblemRequest as resources_submission_types_initialize_problem_request_InitializeProblemRequest,
 )
 from .stop_request import StopRequest
 from .submit_request_v_2 import SubmitRequestV2
 from .workspace_submit_request import WorkspaceSubmitRequest
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 T_Result = typing.TypeVar("T_Result")
 
@@ -27,44 +22,104 @@ class _Factory:
     def initialize_problem_request(
         self, value: resources_submission_types_initialize_problem_request_InitializeProblemRequest
     ) -> SubmissionRequest:
-        return SubmissionRequest(
-            __root__=_SubmissionRequest.InitializeProblemRequest(
-                **value.dict(exclude_unset=True), type="initializeProblemRequest"
+        if IS_PYDANTIC_V2:
+            return SubmissionRequest(
+                root=_SubmissionRequest.InitializeProblemRequest(
+                    **value.dict(exclude_unset=True), type="initializeProblemRequest"
+                )
             )
-        )
+        else:
+            return SubmissionRequest(
+                __root__=_SubmissionRequest.InitializeProblemRequest(
+                    **value.dict(exclude_unset=True), type="initializeProblemRequest"
+                )
+            )
 
     def initialize_workspace_request(self) -> SubmissionRequest:
-        return SubmissionRequest(
-            __root__=_SubmissionRequest.InitializeWorkspaceRequest(type="initializeWorkspaceRequest")
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionRequest(
+                root=_SubmissionRequest.InitializeWorkspaceRequest(type="initializeWorkspaceRequest")
+            )
+        else:
+            return SubmissionRequest(
+                __root__=_SubmissionRequest.InitializeWorkspaceRequest(type="initializeWorkspaceRequest")
+            )
 
     def submit_v_2(self, value: SubmitRequestV2) -> SubmissionRequest:
-        return SubmissionRequest(
-            __root__=_SubmissionRequest.SubmitV2(**value.dict(exclude_unset=True), type="submitV2")
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionRequest(
+                root=_SubmissionRequest.SubmitV2(**value.dict(exclude_unset=True), type="submitV2")
+            )
+        else:
+            return SubmissionRequest(
+                __root__=_SubmissionRequest.SubmitV2(**value.dict(exclude_unset=True), type="submitV2")
+            )
 
     def workspace_submit(self, value: WorkspaceSubmitRequest) -> SubmissionRequest:
-        return SubmissionRequest(
-            __root__=_SubmissionRequest.WorkspaceSubmit(**value.dict(exclude_unset=True), type="workspaceSubmit")
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionRequest(
+                root=_SubmissionRequest.WorkspaceSubmit(**value.dict(exclude_unset=True), type="workspaceSubmit")
+            )
+        else:
+            return SubmissionRequest(
+                __root__=_SubmissionRequest.WorkspaceSubmit(**value.dict(exclude_unset=True), type="workspaceSubmit")
+            )
 
     def stop(self, value: StopRequest) -> SubmissionRequest:
-        return SubmissionRequest(__root__=_SubmissionRequest.Stop(**value.dict(exclude_unset=True), type="stop"))
+        if IS_PYDANTIC_V2:
+            return SubmissionRequest(root=_SubmissionRequest.Stop(**value.dict(exclude_unset=True), type="stop"))
+        else:
+            return SubmissionRequest(__root__=_SubmissionRequest.Stop(**value.dict(exclude_unset=True), type="stop"))
 
 
-class SubmissionRequest(pydantic.BaseModel):
+class SubmissionRequest(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(
-        self,
-    ) -> typing.Union[
-        _SubmissionRequest.InitializeProblemRequest,
-        _SubmissionRequest.InitializeWorkspaceRequest,
-        _SubmissionRequest.SubmitV2,
-        _SubmissionRequest.WorkspaceSubmit,
-        _SubmissionRequest.Stop,
-    ]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[
+                _SubmissionRequest.InitializeProblemRequest,
+                _SubmissionRequest.InitializeWorkspaceRequest,
+                _SubmissionRequest.SubmitV2,
+                _SubmissionRequest.WorkspaceSubmit,
+                _SubmissionRequest.Stop,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _SubmissionRequest.InitializeProblemRequest,
+            _SubmissionRequest.InitializeWorkspaceRequest,
+            _SubmissionRequest.SubmitV2,
+            _SubmissionRequest.WorkspaceSubmit,
+            _SubmissionRequest.Stop,
+        ]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[
+                _SubmissionRequest.InitializeProblemRequest,
+                _SubmissionRequest.InitializeWorkspaceRequest,
+                _SubmissionRequest.SubmitV2,
+                _SubmissionRequest.WorkspaceSubmit,
+                _SubmissionRequest.Stop,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _SubmissionRequest.InitializeProblemRequest,
+            _SubmissionRequest.InitializeWorkspaceRequest,
+            _SubmissionRequest.SubmitV2,
+            _SubmissionRequest.WorkspaceSubmit,
+            _SubmissionRequest.Stop,
+        ]:
+            return self.__root__
 
     def visit(
         self,
@@ -76,72 +131,38 @@ class SubmissionRequest(pydantic.BaseModel):
         workspace_submit: typing.Callable[[WorkspaceSubmitRequest], T_Result],
         stop: typing.Callable[[StopRequest], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "initializeProblemRequest":
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "initializeProblemRequest":
             return initialize_problem_request(
                 resources_submission_types_initialize_problem_request_InitializeProblemRequest(
-                    **self.__root__.dict(exclude_unset=True, exclude={"type"})
+                    **unioned_value.dict(exclude_unset=True, exclude={"type"})
                 )
             )
-        if self.__root__.type == "initializeWorkspaceRequest":
+        if unioned_value.type == "initializeWorkspaceRequest":
             return initialize_workspace_request()
-        if self.__root__.type == "submitV2":
-            return submit_v_2(SubmitRequestV2(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-        if self.__root__.type == "workspaceSubmit":
-            return workspace_submit(WorkspaceSubmitRequest(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-        if self.__root__.type == "stop":
-            return stop(StopRequest(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[
-            _SubmissionRequest.InitializeProblemRequest,
-            _SubmissionRequest.InitializeWorkspaceRequest,
-            _SubmissionRequest.SubmitV2,
-            _SubmissionRequest.WorkspaceSubmit,
-            _SubmissionRequest.Stop,
-        ],
-        pydantic.Field(discriminator="type"),
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        if unioned_value.type == "submitV2":
+            return submit_v_2(SubmitRequestV2(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
+        if unioned_value.type == "workspaceSubmit":
+            return workspace_submit(WorkspaceSubmitRequest(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
+        if unioned_value.type == "stop":
+            return stop(StopRequest(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
 
 
 class _SubmissionRequest:
     class InitializeProblemRequest(resources_submission_types_initialize_problem_request_InitializeProblemRequest):
-        type: typing_extensions.Literal["initializeProblemRequest"]
+        type: typing.Literal["initializeProblemRequest"] = "initializeProblemRequest"
 
-        class Config:
-            allow_population_by_field_name = True
-
-    class InitializeWorkspaceRequest(pydantic.BaseModel):
-        type: typing_extensions.Literal["initializeWorkspaceRequest"]
+    class InitializeWorkspaceRequest(UniversalBaseModel):
+        type: typing.Literal["initializeWorkspaceRequest"] = "initializeWorkspaceRequest"
 
     class SubmitV2(SubmitRequestV2):
-        type: typing_extensions.Literal["submitV2"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["submitV2"] = "submitV2"
 
     class WorkspaceSubmit(WorkspaceSubmitRequest):
-        type: typing_extensions.Literal["workspaceSubmit"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["workspaceSubmit"] = "workspaceSubmit"
 
     class Stop(StopRequest):
-        type: typing_extensions.Literal["stop"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["stop"] = "stop"
 
 
-SubmissionRequest.update_forward_refs()
+update_forward_refs(SubmissionRequest)

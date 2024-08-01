@@ -4,24 +4,39 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .test_case_with_actual_result_implementation import TestCaseWithActualResultImplementation
-from .void_function_definition import VoidFunctionDefinition
-
-
-class TestCaseFunction_WithActualResult(TestCaseWithActualResultImplementation):
-    type: typing_extensions.Literal["withActualResult"]
-
-    class Config:
-        allow_population_by_field_name = True
+from .....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from .assert_correctness_check import AssertCorrectnessCheck
+from .function_implementation_for_multiple_languages import FunctionImplementationForMultipleLanguages
+from .non_void_function_definition import NonVoidFunctionDefinition
+from .parameter import Parameter
 
 
-class TestCaseFunction_Custom(VoidFunctionDefinition):
-    type: typing_extensions.Literal["custom"]
+class TestCaseFunction_WithActualResult(UniversalBaseModel):
+    type: typing.Literal["withActualResult"] = "withActualResult"
+    get_actual_result: NonVoidFunctionDefinition = pydantic.Field(alias="getActualResult")
+    assert_correctness_check: AssertCorrectnessCheck = pydantic.Field(alias="assertCorrectnessCheck")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class TestCaseFunction_Custom(UniversalBaseModel):
+    type: typing.Literal["custom"] = "custom"
+    parameters: typing.List[Parameter]
+    code: FunctionImplementationForMultipleLanguages
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 TestCaseFunction = typing.Union[TestCaseFunction_WithActualResult, TestCaseFunction_Custom]

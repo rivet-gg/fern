@@ -3,9 +3,9 @@
  */
 
 import * as core from "../../../../core";
-import * as SeedEnum from "../../..";
+import * as SeedEnum from "../../../index";
 import urlJoin from "url-join";
-import * as errors from "../../../../errors";
+import * as errors from "../../../../errors/index";
 
 export declare namespace QueryParam {
     interface Options {
@@ -13,22 +13,44 @@ export declare namespace QueryParam {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class QueryParam {
     constructor(protected readonly _options: QueryParam.Options) {}
 
+    /**
+     * @param {SeedEnum.SendEnumAsQueryParamRequest} request
+     * @param {QueryParam.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.queryParam.send({
+     *         operand: SeedEnum.Operand.GreaterThan,
+     *         operandOrColor: SeedEnum.Color.Red
+     *     })
+     */
     public async send(
-        request: SeedEnum.SendEnumAsQueryParamRequest = {},
+        request: SeedEnum.SendEnumAsQueryParamRequest,
         requestOptions?: QueryParam.RequestOptions
     ): Promise<void> {
-        const { value } = request;
-        const _queryParams: Record<string, string | string[]> = {};
-        if (value != null) {
-            _queryParams["value"] = value;
+        const { operand, maybeOperand, operandOrColor, maybeOperandOrColor } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        _queryParams["operand"] = operand;
+        if (maybeOperand != null) {
+            _queryParams["maybeOperand"] = maybeOperand;
+        }
+
+        _queryParams["operandOrColor"] =
+            typeof operandOrColor === "string" ? operandOrColor : JSON.stringify(operandOrColor);
+        if (maybeOperandOrColor != null) {
+            _queryParams["maybeOperandOrColor"] =
+                typeof maybeOperandOrColor === "string" ? maybeOperandOrColor : JSON.stringify(maybeOperandOrColor);
         }
 
         const _response = await core.fetcher({
@@ -36,13 +58,17 @@ export class QueryParam {
             method: "POST",
             headers: {
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/enum",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;
@@ -70,17 +96,55 @@ export class QueryParam {
         }
     }
 
+    /**
+     * @param {SeedEnum.SendEnumListAsQueryParamRequest} request
+     * @param {QueryParam.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.queryParam.sendList({
+     *         operand: SeedEnum.Operand.GreaterThan,
+     *         maybeOperand: SeedEnum.Operand.GreaterThan,
+     *         operandOrColor: SeedEnum.Color.Red,
+     *         maybeOperandOrColor: SeedEnum.Color.Red
+     *     })
+     */
     public async sendList(
-        request: SeedEnum.SendEnumListAsQueryParamRequest = {},
+        request: SeedEnum.SendEnumListAsQueryParamRequest,
         requestOptions?: QueryParam.RequestOptions
     ): Promise<void> {
-        const { value } = request;
-        const _queryParams: Record<string, string | string[]> = {};
-        if (value != null) {
-            if (Array.isArray(value)) {
-                _queryParams["value"] = value.map((item) => item);
+        const { operand, maybeOperand, operandOrColor, maybeOperandOrColor } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (Array.isArray(operand)) {
+            _queryParams["operand"] = operand.map((item) => item);
+        } else {
+            _queryParams["operand"] = operand;
+        }
+
+        if (maybeOperand != null) {
+            if (Array.isArray(maybeOperand)) {
+                _queryParams["maybeOperand"] = maybeOperand.map((item) => item);
             } else {
-                _queryParams["value"] = value;
+                _queryParams["maybeOperand"] = maybeOperand;
+            }
+        }
+
+        if (Array.isArray(operandOrColor)) {
+            _queryParams["operandOrColor"] = operandOrColor.map((item) =>
+                typeof item === "string" ? item : JSON.stringify(item)
+            );
+        } else {
+            _queryParams["operandOrColor"] =
+                typeof operandOrColor === "string" ? operandOrColor : JSON.stringify(operandOrColor);
+        }
+
+        if (maybeOperandOrColor != null) {
+            if (Array.isArray(maybeOperandOrColor)) {
+                _queryParams["maybeOperandOrColor"] = maybeOperandOrColor.map((item) =>
+                    typeof item === "string" ? item : JSON.stringify(item)
+                );
+            } else {
+                _queryParams["maybeOperandOrColor"] =
+                    typeof maybeOperandOrColor === "string" ? maybeOperandOrColor : JSON.stringify(maybeOperandOrColor);
             }
         }
 
@@ -89,13 +153,17 @@ export class QueryParam {
             method: "POST",
             headers: {
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/enum",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
+            requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
             return;

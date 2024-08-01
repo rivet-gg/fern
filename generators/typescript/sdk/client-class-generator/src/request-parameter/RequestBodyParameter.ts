@@ -18,6 +18,10 @@ export class RequestBodyParameter extends AbstractRequestParameter {
         this.requestBodyReference = requestBodyReference;
     }
 
+    public getType(context: SdkContext): ts.TypeNode {
+        return context.type.getReferenceToType(this.requestBodyReference.requestBodyType).typeNode;
+    }
+
     public getInitialStatements(): ts.Statement[] {
         return [];
     }
@@ -40,6 +44,11 @@ export class RequestBodyParameter extends AbstractRequestParameter {
 
     public getReferenceToQueryParameter(): ts.Expression {
         throw new Error("Cannot reference query parameter because request is not wrapped");
+    }
+
+    public isOptional({ context }: { context: SdkContext }): boolean {
+        const type = context.type.getReferenceToType(this.requestBodyReference.requestBodyType);
+        return type.isOptional;
     }
 
     public generateExample({

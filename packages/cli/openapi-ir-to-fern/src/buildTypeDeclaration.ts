@@ -1,11 +1,10 @@
 import { assertNever } from "@fern-api/core-utils";
 import { RelativeFilePath } from "@fern-api/fs-utils";
-import { RawSchemas } from "@fern-api/yaml-schema";
-import { SchemaId } from "@fern-fern/openapi-ir-model/commons";
 import {
     ArraySchema,
+    CasingOverrides,
     EnumSchema,
-    LiteralSchemaValue,
+    LiteralSchema,
     MapSchema,
     ObjectProperty,
     ObjectSchema,
@@ -13,8 +12,10 @@ import {
     OptionalSchema,
     PrimitiveSchema,
     ReferencedSchema,
-    Schema
-} from "@fern-fern/openapi-ir-model/finalIr";
+    Schema,
+    SchemaId
+} from "@fern-api/openapi-ir-sdk";
+import { RawSchemas } from "@fern-api/yaml-schema";
 import {
     buildArrayTypeReference,
     buildLiteralTypeReference,
@@ -26,6 +27,7 @@ import {
     buildUnknownTypeReference
 } from "./buildTypeReference";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { convertAvailability } from "./utils/convertAvailability";
 import { getTypeFromTypeReference } from "./utils/getTypeFromTypeReference";
 
 export interface ConvertedTypeDeclaration {
@@ -60,11 +62,11 @@ export function buildTypeDeclaration({
         case "enum":
             return buildEnumTypeDeclaration(schema);
         case "literal":
-            return buildLiteralTypeDeclaration(schema.value, schema.nameOverride, schema.generatedName);
+            return buildLiteralTypeDeclaration(schema, schema.nameOverride, schema.generatedName);
         case "object":
             return buildObjectTypeDeclaration({ schema, context, declarationFile });
         case "oneOf":
-            return buildOneOfTypeDeclaration({ schema: schema.oneOf, context, declarationFile });
+            return buildOneOfTypeDeclaration({ schema: schema.value, context, declarationFile });
         default:
             assertNever(schema);
     }
@@ -106,14 +108,17 @@ export function buildObjectTypeDeclaration({
             context,
             fileContainingReference: declarationFile
         });
-        if (property.audiences.length > 0) {
-            properties[property.key] =
-                typeof typeReference === "string"
-                    ? { type: typeReference, audiences: property.audiences }
-                    : { ...typeReference, audiences: property.audiences };
-        } else {
-            properties[property.key] = typeReference;
-        }
+
+        const audiences = property.audiences;
+        const name = property.nameOverride;
+        const availability = convertAvailability(property.availability);
+
+        properties[property.key] = convertPropertyTypeReferenceToTypeDefinition(
+            typeReference,
+            audiences,
+            name,
+            availability
+        );
     }
     const propertiesToSetToUnknown: Set<string> = new Set<string>();
 
@@ -127,6 +132,9 @@ export function buildObjectTypeDeclaration({
     const extendedSchemas: string[] = [];
     for (const allOf of schema.allOf) {
         const resolvedSchemaId = getSchemaIdOfResolvedType({ schema: allOf.schema, context });
+        if (resolvedSchemaId == null) {
+            continue;
+        }
         if (schemasToInline.has(allOf.schema) || schemasToInline.has(resolvedSchemaId)) {
             continue; // dont extend from schemas that need to be inlined
         }
@@ -190,6 +198,14 @@ export function buildObjectTypeDeclaration({
     if (extendedSchemas.length > 0) {
         objectTypeDeclaration.extends = extendedSchemas;
     }
+    if (schema.additionalProperties) {
+        objectTypeDeclaration["extra-properties"] = true;
+    }
+
+    if (schema.availability != null) {
+        objectTypeDeclaration.availability = convertAvailability(schema.availability);
+    }
+
     return {
         name: schema.nameOverride ?? schema.generatedName,
         schema: objectTypeDeclaration
@@ -206,6 +222,9 @@ function getAllParentSchemasToInline({
     context: OpenApiIrConverterContext;
 }): SchemaId[] {
     const schema = context.getSchema(schemaId);
+    if (schema == null) {
+        return [];
+    }
     if (schema.type === "reference") {
         return getAllParentSchemasToInline({ property, schemaId: schema.schema, context });
     }
@@ -234,6 +253,9 @@ function getProperties(
     allOf: ReferencedSchema[];
 } {
     const schema = context.getSchema(schemaId);
+    if (schema == null) {
+        return { properties: [], allOf: [] };
+    }
     if (schema.type === "object") {
         return { properties: schema.properties, allOf: schema.allOf };
     } else if (schema.type === "reference") {
@@ -273,10 +295,26 @@ export function buildMapTypeDeclaration({
 }
 
 export function buildPrimitiveTypeDeclaration(schema: PrimitiveSchema): ConvertedTypeDeclaration {
+    const typeReference = buildPrimitiveTypeReference(schema);
+
+    if (typeof typeReference === "string") {
+        return {
+            name: schema.nameOverride ?? schema.generatedName,
+            schema: typeReference
+        };
+    }
+    // We don't want to include the default value in the type alias declaration.
+    const { default: _, ...rest } = typeReference;
     return {
         name: schema.nameOverride ?? schema.generatedName,
-        schema: buildPrimitiveTypeReference(schema)
+        schema: {
+            ...rest
+        }
     };
+}
+
+function isCasingEmpty(casing: CasingOverrides): boolean {
+    return casing.camel == null && casing.pascal == null && casing.screamingSnake == null && casing.snake == null;
 }
 
 export function buildEnumTypeDeclaration(schema: EnumSchema): ConvertedTypeDeclaration {
@@ -284,20 +322,45 @@ export function buildEnumTypeDeclaration(schema: EnumSchema): ConvertedTypeDecla
         enum: schema.values.map((enumValue) => {
             const name = enumValue.nameOverride ?? enumValue.generatedName;
             const value = enumValue.value;
-            if (name === value && enumValue.description == null) {
+            if (
+                name === value &&
+                enumValue.description == null &&
+                (enumValue.casing == null || isCasingEmpty(enumValue.casing))
+            ) {
                 return name;
-            } else if (name === value && enumValue.description != null) {
-                return {
-                    value,
-                    docs: enumValue.description
-                };
             }
+
             const enumValueDeclaration: RawSchemas.EnumValueSchema = {
-                name,
                 value: enumValue.value
             };
+            if (name !== value) {
+                enumValueDeclaration.name = name;
+            }
             if (enumValue.description != null) {
                 enumValueDeclaration.docs = enumValue.description;
+            }
+            if (enumValue.casing != null && !isCasingEmpty(enumValue.casing)) {
+                const casing: RawSchemas.CasingOverridesSchema = {};
+                let setCasing = false;
+                if (enumValue.casing.camel != null) {
+                    casing.camel = enumValue.casing.camel;
+                    setCasing = true;
+                }
+                if (enumValue.casing.screamingSnake != null) {
+                    casing["screaming-snake"] = enumValue.casing.screamingSnake;
+                    setCasing = true;
+                }
+                if (enumValue.casing.snake != null) {
+                    casing.snake = enumValue.casing.snake;
+                    setCasing = true;
+                }
+                if (enumValue.casing.pascal != null) {
+                    casing.pascal = enumValue.casing.pascal;
+                    setCasing = true;
+                }
+                if (setCasing) {
+                    enumValueDeclaration.casing = casing;
+                }
             }
             return enumValueDeclaration;
         })
@@ -305,9 +368,24 @@ export function buildEnumTypeDeclaration(schema: EnumSchema): ConvertedTypeDecla
     if (schema.description != null) {
         enumSchema.docs = schema.description;
     }
+    if (schema.default != null) {
+        enumSchema.default = schema.default.value;
+    }
+    const uniqueEnumName = new Set<string>();
+    const uniqueEnumSchema: RawSchemas.EnumSchema = {
+        ...enumSchema,
+        enum: []
+    };
+    for (const enumValue of enumSchema.enum) {
+        const name = typeof enumValue === "string" ? enumValue : enumValue.name ?? enumValue.value;
+        if (!uniqueEnumName.has(name.toLowerCase())) {
+            uniqueEnumSchema.enum.push(enumValue);
+            uniqueEnumName.add(name.toLowerCase());
+        } // TODO: log a warning if the name is not unique
+    }
     return {
         name: schema.nameOverride ?? schema.generatedName,
-        schema: enumSchema
+        schema: uniqueEnumSchema
     };
 }
 
@@ -357,13 +435,13 @@ export function buildUnknownTypeDeclaration(
 }
 
 export function buildLiteralTypeDeclaration(
-    value: LiteralSchemaValue,
+    schema: LiteralSchema,
     nameOverride: string | null | undefined,
     generatedName: string
 ): ConvertedTypeDeclaration {
     return {
         name: nameOverride ?? generatedName,
-        schema: buildLiteralTypeReference(value)
+        schema: buildLiteralTypeReference(schema)
     };
 }
 
@@ -435,10 +513,31 @@ function getSchemaIdOfResolvedType({
 }: {
     schema: SchemaId;
     context: OpenApiIrConverterContext;
-}): SchemaId {
+}): SchemaId | undefined {
     const resolvedSchema = context.getSchema(schema);
+    if (resolvedSchema == null) {
+        return undefined;
+    }
     if (resolvedSchema.type === "reference") {
         return getSchemaIdOfResolvedType({ context, schema: resolvedSchema.schema });
     }
     return schema;
+}
+
+function convertPropertyTypeReferenceToTypeDefinition(
+    typeReference: RawSchemas.TypeReferenceWithDocsSchema,
+    audiences: string[],
+    name?: string | undefined,
+    availability?: RawSchemas.AvailabilityUnionSchema
+): RawSchemas.ObjectPropertySchema {
+    if (audiences.length === 0 && name == null && availability == null) {
+        return typeReference;
+    } else {
+        return {
+            ...(typeof typeReference === "string" ? { type: typeReference } : { ...typeReference }),
+            ...(audiences.length > 0 ? { audiences } : {}),
+            ...(name != null ? { name } : {}),
+            ...(availability != null ? { availability } : {})
+        };
+    }
 }

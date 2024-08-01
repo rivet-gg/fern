@@ -2,78 +2,73 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ....core.datetime_utils import serialize_datetime
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalRootModel, update_forward_refs
 from .test_submission_status_v_2 import TestSubmissionStatusV2
 from .workspace_submission_status_v_2 import WorkspaceSubmissionStatusV2
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def test(self, value: TestSubmissionStatusV2) -> SubmissionStatusV2:
-        return SubmissionStatusV2(__root__=_SubmissionStatusV2.Test(**value.dict(exclude_unset=True), type="test"))
+        if IS_PYDANTIC_V2:
+            return SubmissionStatusV2(root=_SubmissionStatusV2.Test(**value.dict(exclude_unset=True), type="test"))
+        else:
+            return SubmissionStatusV2(__root__=_SubmissionStatusV2.Test(**value.dict(exclude_unset=True), type="test"))
 
     def workspace(self, value: WorkspaceSubmissionStatusV2) -> SubmissionStatusV2:
-        return SubmissionStatusV2(
-            __root__=_SubmissionStatusV2.Workspace(**value.dict(exclude_unset=True), type="workspace")
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionStatusV2(
+                root=_SubmissionStatusV2.Workspace(**value.dict(exclude_unset=True), type="workspace")
+            )
+        else:
+            return SubmissionStatusV2(
+                __root__=_SubmissionStatusV2.Workspace(**value.dict(exclude_unset=True), type="workspace")
+            )
 
 
-class SubmissionStatusV2(pydantic.BaseModel):
+class SubmissionStatusV2(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(self) -> typing.Union[_SubmissionStatusV2.Test, _SubmissionStatusV2.Workspace]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[_SubmissionStatusV2.Test, _SubmissionStatusV2.Workspace], pydantic.Field(discriminator="type")
+        ]
+
+        def get_as_union(self) -> typing.Union[_SubmissionStatusV2.Test, _SubmissionStatusV2.Workspace]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[_SubmissionStatusV2.Test, _SubmissionStatusV2.Workspace], pydantic.Field(discriminator="type")
+        ]
+
+        def get_as_union(self) -> typing.Union[_SubmissionStatusV2.Test, _SubmissionStatusV2.Workspace]:
+            return self.__root__
 
     def visit(
         self,
         test: typing.Callable[[TestSubmissionStatusV2], T_Result],
         workspace: typing.Callable[[WorkspaceSubmissionStatusV2], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "test":
-            return test(TestSubmissionStatusV2(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-        if self.__root__.type == "workspace":
-            return workspace(WorkspaceSubmissionStatusV2(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[_SubmissionStatusV2.Test, _SubmissionStatusV2.Workspace], pydantic.Field(discriminator="type")
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "test":
+            return test(TestSubmissionStatusV2(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
+        if unioned_value.type == "workspace":
+            return workspace(WorkspaceSubmissionStatusV2(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
 
 
 class _SubmissionStatusV2:
     class Test(TestSubmissionStatusV2):
-        type: typing_extensions.Literal["test"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["test"] = "test"
 
     class Workspace(WorkspaceSubmissionStatusV2):
-        type: typing_extensions.Literal["workspace"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["workspace"] = "workspace"
 
 
-SubmissionStatusV2.update_forward_refs()
+update_forward_refs(SubmissionStatusV2)

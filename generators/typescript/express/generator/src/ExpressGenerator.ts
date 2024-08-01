@@ -59,6 +59,11 @@ export declare namespace ExpressGenerator {
         treatUnknownAsAny: boolean;
         includeSerdeLayer: boolean;
         outputEsm: boolean;
+        retainOriginalCasing: boolean;
+        allowExtraFields: boolean;
+        skipRequestValidation: boolean;
+        skipResponseValidation: boolean;
+        requestValidationStatusCode: number;
     }
 }
 
@@ -180,6 +185,7 @@ export class ExpressGenerator {
             includeUtilsOnUnionMembers: config.includeUtilsOnUnionMembers,
             includeOtherInUnionTypes: config.includeOtherInUnionTypes,
             includeSerdeLayer: config.includeSerdeLayer,
+            retainOriginalCasing: config.retainOriginalCasing,
             noOptionalProperties: false
         });
         this.typeSchemaGenerator = new TypeSchemaGenerator({
@@ -189,15 +195,22 @@ export class ExpressGenerator {
         this.typeReferenceExampleGenerator = new TypeReferenceExampleGenerator();
         this.expressInlinedRequestBodyGenerator = new ExpressInlinedRequestBodyGenerator();
         this.expressInlinedRequestBodySchemaGenerator = new ExpressInlinedRequestBodySchemaGenerator({
-            includeSerdeLayer: config.includeSerdeLayer
+            includeSerdeLayer: config.includeSerdeLayer,
+            skipRequestValidation: config.skipRequestValidation
         });
         this.expressEndpointTypeSchemasGenerator = new ExpressEndpointTypeSchemasGenerator({
-            includeSerdeLayer: config.includeSerdeLayer
+            includeSerdeLayer: config.includeSerdeLayer,
+            allowExtraFields: config.allowExtraFields,
+            skipRequestValidation: config.skipRequestValidation,
+            skipResponseValidation: config.skipResponseValidation
         });
         this.expressServiceGenerator = new ExpressServiceGenerator({
             packageResolver: this.packageResolver,
             doNotHandleUnrecognizedErrors: config.doNotHandleUnrecognizedErrors,
-            includeSerdeLayer: config.includeSerdeLayer
+            includeSerdeLayer: config.includeSerdeLayer,
+            skipRequestValidation: config.skipRequestValidation,
+            skipResponseValidation: config.skipResponseValidation,
+            requestValidationStatusCode: config.requestValidationStatusCode
         });
         this.expressRegisterGenerator = new ExpressRegisterGenerator({
             packageResolver: this.packageResolver,
@@ -208,7 +221,8 @@ export class ExpressGenerator {
         this.genericApiExpressErrorGenerator = new GenericAPIExpressErrorGenerator();
         this.expressErrorGenerator = new ExpressErrorGenerator();
         this.expressErrorSchemaGenerator = new ExpressErrorSchemaGenerator({
-            includeSerdeLayer: config.includeSerdeLayer
+            includeSerdeLayer: config.includeSerdeLayer,
+            allowExtraFields: config.allowExtraFields
         });
     }
 
@@ -238,12 +252,25 @@ export class ExpressGenerator {
             extraDependencies: {},
             extraDevDependencies: {},
             extraFiles: {},
-            extraScripts: {}
+            extraScripts: {},
+            extraPeerDependencies: {},
+            extraPeerDependenciesMeta: {},
+            resolutions: {
+                "@types/mime": "3.0.4"
+            },
+            extraConfigs: undefined,
+            outputJsr: false
         });
     }
 
-    public async copyCoreUtilities({ pathToSrc }: { pathToSrc: AbsoluteFilePath }): Promise<void> {
-        await this.coreUtilitiesManager.copyCoreUtilities({ pathToSrc });
+    public async copyCoreUtilities({
+        pathToSrc,
+        pathToRoot
+    }: {
+        pathToSrc: AbsoluteFilePath;
+        pathToRoot: AbsoluteFilePath;
+    }): Promise<void> {
+        await this.coreUtilitiesManager.copyCoreUtilities({ pathToSrc, pathToRoot });
     }
 
     private generateTypeDeclarations() {
@@ -477,7 +504,8 @@ export class ExpressGenerator {
             expressRegisterGenerator: this.expressRegisterGenerator,
             expressErrorSchemaDeclarationReferencer: this.expressErrorSchemaDeclarationReferencer,
             expressErrorSchemaGenerator: this.expressErrorSchemaGenerator,
-            includeSerdeLayer: this.config.includeSerdeLayer
+            includeSerdeLayer: this.config.includeSerdeLayer,
+            retainOriginalCasing: this.config.retainOriginalCasing
         });
     }
 }

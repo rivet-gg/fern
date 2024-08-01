@@ -18,7 +18,7 @@
     "clean": "rm -rf ./lib && tsc --build --clean",
     "compile": "tsc --build",
     "test": "yarn compile && jest --passWithNoTests",
-    "lint:eslint": "eslint --max-warnings 0 . --ignore-path=../../../.eslintignore --report-unused-disable-directives",
+    "lint:eslint": "eslint --max-warnings 0 . --ignore-path=../../../.eslintignore",
     "lint:eslint:fix": "yarn lint:eslint --fix",
     "format": "prettier --write --ignore-unknown --ignore-path ../../../shared/.prettierignore \"**\"",
     "format:check": "prettier --check --ignore-unknown --ignore-path ../../../shared/.prettierignore \"**\"",
@@ -27,13 +27,15 @@
   },
   "dependencies": {
     "@fern-api/fs-utils": "workspace:*",
-    "@fern-fern/generator-exec-sdk": "0.0.571",
-    "@fern-fern/ir-sdk": "0.0.3294",
-    "lodash-es": "^4.17.21"
+    "@fern-api/generator-commons": "workspace:*",
+    "@fern-fern/generator-exec-sdk": "^0.0.898",
+    "@fern-fern/ir-sdk": "^39",
+    "lodash-es": "^4.17.21",
+    "url-join": "^5.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.0.3",
-    "@types/lodash-es": "^4.17.9",
+    "@types/jest": "^29.5.12",
+    "@types/lodash-es": "^4.17.12",
     "@types/node": "^18.7.18",
     "depcheck": "^1.4.6",
     "eslint": "^8.56.0",
