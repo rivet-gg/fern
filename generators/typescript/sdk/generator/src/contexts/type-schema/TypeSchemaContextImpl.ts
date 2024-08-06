@@ -171,7 +171,12 @@ export class TypeSchemaContextImpl implements TypeSchemaContext {
                         return { type: "fromRoot", useDynamicImport: false, namespaceImport: "serializers" };
                     } else if (isGeneratingSchema) {
                         // Return default import strategy or another strategy based on your logic
-                        return { type: "fromRoot", useDynamicImport: false, namespaceImport: "serializers" };
+                        return {
+                            type: "direct",
+                            alias: `${typeName.fernFilepath.allParts.map((name) => name.snakeCase.safeName).join("_")}$$${
+                                typeName.name.camelCase.safeName
+                            }`
+                        };
                     } else {
                         // We don't really know when or if this case is actually used
                         return getSchemaImportStrategy({ useDynamicImport: false });
