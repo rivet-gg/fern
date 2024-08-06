@@ -142,7 +142,7 @@ export class TypeSchemaContextImpl implements TypeSchemaContext {
                       useDynamicImport: false,
                       namespaceImport: "serializers"
                   }
-                : { type: "direct" },
+                : { type: "fromRoot", useDynamicImport: true },
             // TODO this should not be hardcoded here
             subImport: ["Raw"],
             importsManager: this.importsManager,
@@ -171,7 +171,7 @@ export class TypeSchemaContextImpl implements TypeSchemaContext {
                         return { type: "fromRoot", useDynamicImport: false, namespaceImport: "serializers" };
                     } else if (isGeneratingSchema) {
                         // Return default import strategy or another strategy based on your logic
-                        return { type: "direct" };
+                        return { type: "fromRoot", useDynamicImport: false, namespaceImport: "serializers" };
                     } else {
                         // We don't really know when or if this case is actually used
                         return getSchemaImportStrategy({ useDynamicImport: false });
