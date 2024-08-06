@@ -43,6 +43,10 @@ export class CoreUtilitiesManager {
 
     public getCoreUtilities({ sourceFile, importsManager }: CoreUtilitiesManager.getCoreUtilities.Args): CoreUtilities {
         const getReferenceToExport = this.createGetReferenceToExport({ sourceFile, importsManager });
+        // when removing x-fern headers from client, runtime won't be added to core utilities
+        // causing a compile error
+        const runtime = new RuntimeImpl({ getReferenceToExport });
+        this.referencedCoreUtilities["runtime"] = runtime.MANIFEST;
         return {
             zurg: new ZurgImpl({ getReferenceToExport }),
             fetcher: new FetcherImpl({ getReferenceToExport }),
@@ -51,7 +55,7 @@ export class CoreUtilitiesManager {
             base: new BaseCoreUtilitiesImpl({ getReferenceToExport }),
             callbackQueue: new CallbackQueueImpl({ getReferenceToExport }),
             formDataUtils: new FormDataUtilsImpl({ getReferenceToExport }),
-            runtime: new RuntimeImpl({ getReferenceToExport }),
+            runtime,
             pagination: new PaginationImpl({ getReferenceToExport }),
             utils: new UtilsImpl({ getReferenceToExport })
         };
