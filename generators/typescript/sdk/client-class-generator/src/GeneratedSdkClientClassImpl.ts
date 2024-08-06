@@ -794,25 +794,25 @@ export class GeneratedSdkClientClassImpl implements GeneratedSdkClientClass {
                         header: header.name.wireValue,
                         value
                     };
-                }),
-            {
-                header: this.intermediateRepresentation.sdkConfig.platformHeaders.language,
-                value: ts.factory.createStringLiteral("JavaScript")
-            }
+                })
+            // {
+            //     header: this.intermediateRepresentation.sdkConfig.platformHeaders.language,
+            //     value: ts.factory.createStringLiteral("JavaScript")
+            // }
         ];
 
-        if (this.npmPackage != null) {
-            headers.push(
-                {
-                    header: this.intermediateRepresentation.sdkConfig.platformHeaders.sdkName,
-                    value: ts.factory.createStringLiteral(this.npmPackage.packageName)
-                },
-                {
-                    header: this.intermediateRepresentation.sdkConfig.platformHeaders.sdkVersion,
-                    value: ts.factory.createStringLiteral(this.npmPackage.version)
-                }
-            );
-        }
+        // if (this.npmPackage != null) {
+        //     headers.push(
+        //         {
+        //             header: this.intermediateRepresentation.sdkConfig.platformHeaders.sdkName,
+        //             value: ts.factory.createStringLiteral(this.npmPackage.packageName)
+        //         },
+        //         {
+        //             header: this.intermediateRepresentation.sdkConfig.platformHeaders.sdkVersion,
+        //             value: ts.factory.createStringLiteral(this.npmPackage.version)
+        //         }
+        //     );
+        // }
 
         const generatedVersion = context.version.getGeneratedVersion();
         if (generatedVersion != null) {

@@ -173,9 +173,9 @@ export class TypeSchemaContextImpl implements TypeSchemaContext {
                         // Return default import strategy or another strategy based on your logic
                         return {
                             type: "direct",
-                            alias: `${typeName.fernFilepath.allParts.map((name) => name.snakeCase.safeName).join("_")}$$${
-                                typeName.name.camelCase.safeName
-                            }`
+                            alias: `${typeName.fernFilepath.allParts
+                                .map((name) => name.snakeCase.safeName)
+                                .join("_")}$$${typeName.name.camelCase.safeName}`
                         };
                     } else {
                         // We don't really know when or if this case is actually used
