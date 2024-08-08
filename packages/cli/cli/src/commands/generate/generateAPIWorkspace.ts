@@ -80,7 +80,7 @@ export async function generateWorkspace({
         });
     } else {
         if (!token) {
-            return context.failAndThrow("Token is required for remote generation.");
+            return context.failAndThrow("Must provide token if 'useLocalDocker' is false");
         }
         await runRemoteGenerationForAPIWorkspace({
             projectConfig,

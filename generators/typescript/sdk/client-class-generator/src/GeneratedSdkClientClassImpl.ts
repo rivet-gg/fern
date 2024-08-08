@@ -42,6 +42,7 @@ import { getLiteralValueForHeader, isLiteralHeader } from "./endpoints/utils/isL
 import { REQUEST_OPTIONS_PARAMETER_NAME } from "./endpoints/utils/requestOptionsParameter";
 import { OAuthTokenProviderGenerator } from "./oauth-generator/OAuthTokenProviderGenerator";
 
+
 export declare namespace GeneratedSdkClientClassImpl {
     export interface Init {
         isRoot: boolean;
@@ -864,6 +865,7 @@ export class GeneratedSdkClientClassImpl implements GeneratedSdkClientClass {
                 value
             });
         }
+
 
         // headers.push(
         //     {
