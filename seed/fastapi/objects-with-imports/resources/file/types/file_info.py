@@ -8,7 +8,9 @@ T_Result = typing.TypeVar("T_Result")
 
 class FileInfo(str, enum.Enum):
     """
-    from seed.objects_with_imports import FileInfo
+    Examples
+    --------
+    from seed.objects_with_imports.resources.file import FileInfo
 
     FileInfo.REGULAR
     """

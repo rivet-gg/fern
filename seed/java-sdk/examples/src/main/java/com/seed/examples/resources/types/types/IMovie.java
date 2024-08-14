@@ -3,10 +3,13 @@
  */
 package com.seed.examples.resources.types.types;
 
+import java.util.Map;
 import java.util.Optional;
 
 public interface IMovie {
     String getId();
+
+    Optional<String> getPrequel();
 
     String getTitle();
 
@@ -19,4 +22,6 @@ public interface IMovie {
     String getTag();
 
     Optional<String> getBook();
+
+    Map<String, Object> getMetadata();
 }

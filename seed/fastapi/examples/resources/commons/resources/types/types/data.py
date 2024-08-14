@@ -2,72 +2,73 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ......core.datetime_utils import serialize_datetime
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ......core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, UniversalRootModel, update_forward_refs
 
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def string(self, value: str) -> Data:
-        return Data(__root__=_Data.String(type="string", value=value))
+        if IS_PYDANTIC_V2:
+            return Data(root=_Data.String(type="string", value=value))
+        else:
+            return Data(__root__=_Data.String(type="string", value=value))
 
     def base_64(self, value: str) -> Data:
-        return Data(__root__=_Data.Base64(type="base64", value=value))
+        if IS_PYDANTIC_V2:
+            return Data(root=_Data.Base64(type="base64", value=value))
+        else:
+            return Data(__root__=_Data.Base64(type="base64", value=value))
 
 
-class Data(pydantic.BaseModel):
+class Data(UniversalRootModel):
     """
-    from seed.examples.resources.commons import Data_String
+    Examples
+    --------
+    from seed.examples.resources.commons.resources.types import Data_String
 
-    Data_String(type="string", value="data")
+    Data_String(value="data")
     """
 
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(self) -> typing.Union[_Data.String, _Data.Base64]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[_Data.String, _Data.Base64], pydantic.Field(discriminator="type")
+        ]
+
+        def get_as_union(self) -> typing.Union[_Data.String, _Data.Base64]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[_Data.String, _Data.Base64], pydantic.Field(discriminator="type")
+        ]
+
+        def get_as_union(self) -> typing.Union[_Data.String, _Data.Base64]:
+            return self.__root__
 
     def visit(self, string: typing.Callable[[str], T_Result], base_64: typing.Callable[[str], T_Result]) -> T_Result:
-        if self.__root__.type == "string":
-            return string(self.__root__.value)
-        if self.__root__.type == "base64":
-            return base_64(self.__root__.value)
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[_Data.String, _Data.Base64], pydantic.Field(discriminator="type")
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "string":
+            return string(unioned_value.value)
+        if unioned_value.type == "base64":
+            return base_64(unioned_value.value)
 
 
 class _Data:
-    class String(pydantic.BaseModel):
-        type: typing_extensions.Literal["string"]
+    class String(UniversalBaseModel):
+        type: typing.Literal["string"] = "string"
         value: str
 
-    class Base64(pydantic.BaseModel):
-        type: typing_extensions.Literal["base64"]
+    class Base64(UniversalBaseModel):
+        type: typing.Literal["base64"] = "base64"
         value: str
 
 
-Data.update_forward_refs()
+update_forward_refs(Data)

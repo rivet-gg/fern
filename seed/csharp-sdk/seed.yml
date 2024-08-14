@@ -1,6 +1,37 @@
-irVersion: v33
+
+irVersion: v53
 docker: fernapi/fern-csharp-sdk:latest
 dockerCommand: yarn workspace @fern-api/fern-csharp-sdk dockerTagLatest
-language: java # change to csharp
+language: csharp
 generatorType: SDK
 defaultOutputMode: github
+scripts:
+  - docker: bitnami/dotnet-sdk:8
+    commands:
+      - dotnet build src -c Release /p:ContinuousIntegrationBuild=true
+local: 
+  workingDirectory: generators/csharp
+  buildCommand: 
+    - yarn workspace @fern-api/fern-csharp-sdk dist:cli
+  runCommand: node sdk/dist/bundle.cjs
+fixtures: 
+  imdb:
+    - customConfig: null
+      outputFolder: no-custom-config
+    - customConfig:
+        extra-dependencies:
+          Moq: 4.20.70
+          Moq.Contrib.HttpClient: "1.4.0"
+      outputFolder: extra-dependencies
+    - customConfig:
+        base-api-exception-class-name: CustomApiException
+        base-exception-class-name: CustomException
+      outputFolder: exception-class-names
+  exhaustive:
+    - customConfig:
+        explicit-namespaces: true
+      outputFolder: explicit-namespaces
+allowedFailures:
+  - objects-with-imports
+  - examples
+

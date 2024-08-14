@@ -4,32 +4,46 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .compile_error import CompileError
-from .internal_error import InternalError
-from .runtime_error import RuntimeError
-
-
-class ErrorInfo_CompileError(CompileError):
-    type: typing_extensions.Literal["compileError"]
-
-    class Config:
-        allow_population_by_field_name = True
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from .exception_info import ExceptionInfo
 
 
-class ErrorInfo_RuntimeError(RuntimeError):
-    type: typing_extensions.Literal["runtimeError"]
+class ErrorInfo_CompileError(UniversalBaseModel):
+    type: typing.Literal["compileError"] = "compileError"
+    message: str
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class ErrorInfo_InternalError(InternalError):
-    type: typing_extensions.Literal["internalError"]
+class ErrorInfo_RuntimeError(UniversalBaseModel):
+    type: typing.Literal["runtimeError"] = "runtimeError"
+    message: str
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class ErrorInfo_InternalError(UniversalBaseModel):
+    type: typing.Literal["internalError"] = "internalError"
+    exception_info: ExceptionInfo = pydantic.Field(alias="exceptionInfo")
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 ErrorInfo = typing.Union[ErrorInfo_CompileError, ErrorInfo_RuntimeError, ErrorInfo_InternalError]

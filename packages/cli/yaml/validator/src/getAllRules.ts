@@ -13,7 +13,6 @@ import { NoDuplicateFieldNamesRule } from "./rules/no-duplicate-field-names";
 import { NoErrorStatusCodeConflictRule } from "./rules/no-error-status-code-conflict";
 import { NoExtensionsWithFileUploadRule } from "./rules/no-extensions-with-file-upload";
 import { NoGetRequestBodyRule } from "./rules/no-get-request-body";
-import { NoMaybeStreamingRule } from "./rules/no-maybe-streaming";
 import { NoMissingAuthRule } from "./rules/no-missing-auth";
 import { NoMissingErrorDiscriminantRule } from "./rules/no-missing-error-discriminant";
 import { NoMissingRequestNameRule } from "./rules/no-missing-request-name";
@@ -29,11 +28,17 @@ import { ValidBasePathRule } from "./rules/valid-base-path";
 import { ValidDefaultEnvironmentRule } from "./rules/valid-default-environment";
 import { ValidEndpointPathRule } from "./rules/valid-endpoint-path";
 import { ValidExampleEndpointCallRule } from "./rules/valid-example-endpoint-call";
+import { ValidExampleErrorRule } from "./rules/valid-example-error";
 import { ValidExampleTypeRule } from "./rules/valid-example-type";
 import { ValidFieldNamesRule } from "./rules/valid-field-names";
 import { ValidNavigationRule } from "./rules/valid-navigation";
+import { ValidOauthRule } from "./rules/valid-oauth";
+import { ValidPaginationRule } from "./rules/valid-pagination";
 import { ValidServiceUrlsRule } from "./rules/valid-service-urls";
+import { ValidStreamConditionRule } from "./rules/valid-stream-condition";
 import { ValidTypeNameRule } from "./rules/valid-type-name";
+import { ValidTypeReferenceWithDefaultAndValidationRule } from "./rules/valid-type-reference-with-default-and-validation";
+import { ValidVersionRule } from "./rules/valid-version";
 
 export function getAllRules(): Rule[] {
     return [
@@ -70,8 +75,13 @@ export function getAllRules(): Rule[] {
         ValidNavigationRule,
         NoUndefinedVariableReferenceRule,
         OnlyObjectExtensionsRule,
-        NoMaybeStreamingRule,
-        NoResponsePropertyRule
+        NoResponsePropertyRule,
+        ValidOauthRule,
+        ValidPaginationRule,
+        ValidExampleErrorRule,
+        ValidTypeReferenceWithDefaultAndValidationRule,
+        ValidStreamConditionRule,
+        ValidVersionRule
     ];
 }
 

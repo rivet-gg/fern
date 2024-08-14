@@ -13,13 +13,18 @@ export declare namespace SeedEnumClient {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class SeedEnumClient {
-    constructor(protected readonly _options: SeedEnumClient.Options) {}
+    constructor(protected readonly _options: SeedEnumClient.Options) {
+    }
 
     protected _inlinedRequest: InlinedRequest | undefined;
 

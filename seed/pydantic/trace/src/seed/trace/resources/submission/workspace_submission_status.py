@@ -4,44 +4,62 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .error_info import ErrorInfo
+from .exception_info import ExceptionInfo
+from .exception_v_2 import ExceptionV2
 from .running_submission_state import RunningSubmissionState
-from .workspace_run_details import WorkspaceRunDetails
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 
-class WorkspaceSubmissionStatus_Stopped(pydantic.BaseModel):
-    type: typing_extensions.Literal["stopped"]
+class WorkspaceSubmissionStatus_Stopped(UniversalBaseModel):
+    type: typing.Literal["stopped"] = "stopped"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class WorkspaceSubmissionStatus_Errored(pydantic.BaseModel):
-    type: typing_extensions.Literal["errored"]
+class WorkspaceSubmissionStatus_Errored(UniversalBaseModel):
     value: ErrorInfo
+    type: typing.Literal["errored"] = "errored"
 
 
-class WorkspaceSubmissionStatus_Running(pydantic.BaseModel):
-    type: typing_extensions.Literal["running"]
+class WorkspaceSubmissionStatus_Running(UniversalBaseModel):
     value: RunningSubmissionState
+    type: typing.Literal["running"] = "running"
 
 
-class WorkspaceSubmissionStatus_Ran(WorkspaceRunDetails):
-    type: typing_extensions.Literal["ran"]
+class WorkspaceSubmissionStatus_Ran(UniversalBaseModel):
+    type: typing.Literal["ran"] = "ran"
+    exception_v_2: typing.Optional[ExceptionV2] = pydantic.Field(alias="exceptionV2", default=None)
+    exception: typing.Optional[ExceptionInfo] = None
+    stdout: str
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class WorkspaceSubmissionStatus_Traced(WorkspaceRunDetails):
-    type: typing_extensions.Literal["traced"]
+class WorkspaceSubmissionStatus_Traced(UniversalBaseModel):
+    type: typing.Literal["traced"] = "traced"
+    exception_v_2: typing.Optional[ExceptionV2] = pydantic.Field(alias="exceptionV2", default=None)
+    exception: typing.Optional[ExceptionInfo] = None
+    stdout: str
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 WorkspaceSubmissionStatus = typing.Union[

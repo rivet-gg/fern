@@ -4,102 +4,112 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as SeedTrace from "../../..";
+import * as SeedTrace from "../../../index";
 import urlJoin from "url-join";
 
 export declare namespace Sysprop {
     interface Options {
         environment?: core.Supplier<environments.SeedTraceEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
+        /** Override the X-Random-Header header */
         xRandomHeader?: core.Supplier<string | undefined>;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
+        /** Override the X-Random-Header header */
+        xRandomHeader?: string | undefined;
     }
 }
 
 export class Sysprop {
-    constructor(protected readonly _options: Sysprop.Options = {}) {}
+    constructor(protected readonly _options: Sysprop.Options = {}) {
+    }
 
-    public async setNumWarmInstances(
-        language: SeedTrace.Language,
-        numWarmInstances: number,
-        requestOptions?: Sysprop.RequestOptions
-    ): Promise<core.APIResponse<void, SeedTrace.sysprop.setNumWarmInstances.Error>> {
+    /**
+     * @param {SeedTrace.Language} language
+     * @param {number} numWarmInstances
+     * @param {Sysprop.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.sysprop.setNumWarmInstances(SeedTrace.Language.Java, 1)
+     */
+    public async setNumWarmInstances(language: SeedTrace.Language, numWarmInstances: number, requestOptions?: Sysprop.RequestOptions): Promise<core.APIResponse<void, SeedTrace.sysprop.setNumWarmInstances.Error>> {
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/sysprop/num-warm-instances/${language}/${numWarmInstances}`
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, `/sysprop/num-warm-instances/${encodeURIComponent(language)}/${encodeURIComponent(numWarmInstances)}`),
             method: "PUT",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: undefined,
+                body: undefined
             };
         }
 
         return {
             ok: false,
-            error: SeedTrace.sysprop.setNumWarmInstances.Error._unknown(_response.error),
+            error: SeedTrace.sysprop.setNumWarmInstances.Error._unknown(_response.error)
         };
     }
 
-    public async getNumWarmInstances(
-        requestOptions?: Sysprop.RequestOptions
-    ): Promise<
-        core.APIResponse<Record<SeedTrace.Language, number | undefined>, SeedTrace.sysprop.getNumWarmInstances.Error>
-    > {
+    /**
+     * @param {Sysprop.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.sysprop.getNumWarmInstances()
+     */
+    public async getNumWarmInstances(requestOptions?: Sysprop.RequestOptions): Promise<core.APIResponse<Record<SeedTrace.Language, number | undefined>, SeedTrace.sysprop.getNumWarmInstances.Error>> {
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                "/sysprop/num-warm-instances"
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, "/sysprop/num-warm-instances"),
             method: "GET",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: _response.body as Record<SeedTrace.Language, number | undefined>,
+                body: _response.body as Record<SeedTrace.Language, number | undefined>
             };
         }
 
         return {
             ok: false,
-            error: SeedTrace.sysprop.getNumWarmInstances.Error._unknown(_response.error),
+            error: SeedTrace.sysprop.getNumWarmInstances.Error._unknown(_response.error)
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

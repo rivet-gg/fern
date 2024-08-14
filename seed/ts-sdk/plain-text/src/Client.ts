@@ -11,13 +11,18 @@ export declare namespace SeedPlainTextClient {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class SeedPlainTextClient {
-    constructor(protected readonly _options: SeedPlainTextClient.Options) {}
+    constructor(protected readonly _options: SeedPlainTextClient.Options) {
+    }
 
     protected _service: Service | undefined;
 

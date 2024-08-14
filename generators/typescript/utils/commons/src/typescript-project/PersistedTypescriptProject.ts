@@ -12,8 +12,10 @@ export declare namespace PersistedTypescriptProject {
         directory: AbsoluteFilePath;
         srcDirectory: RelativeFilePath;
         distDirectory: RelativeFilePath;
+        testDirectory: RelativeFilePath;
         yarnBuildCommand: string[];
         yarnFormatCommand: string[];
+        runScripts: boolean;
     }
 }
 
@@ -21,6 +23,7 @@ export class PersistedTypescriptProject {
     private directory: AbsoluteFilePath;
     private srcDirectory: RelativeFilePath;
     private distDirectory: RelativeFilePath;
+    private testDirectory: RelativeFilePath;
     private yarnBuildCommand: string[];
     private yarnFormatCommand: string[];
 
@@ -28,25 +31,39 @@ export class PersistedTypescriptProject {
     private hasFormatted = false;
     private hasBuilt = false;
 
+    private runScripts;
+
     constructor({
         directory,
         srcDirectory,
         distDirectory,
+        testDirectory,
         yarnBuildCommand,
-        yarnFormatCommand
+        yarnFormatCommand,
+        runScripts
     }: PersistedTypescriptProject.Init) {
         this.directory = directory;
         this.srcDirectory = srcDirectory;
         this.distDirectory = distDirectory;
+        this.testDirectory = testDirectory;
         this.yarnBuildCommand = yarnBuildCommand;
         this.yarnFormatCommand = yarnFormatCommand;
+        this.runScripts = runScripts;
     }
 
     public getSrcDirectory(): AbsoluteFilePath {
         return join(this.directory, this.srcDirectory);
     }
 
+    public getRootDirectory(): AbsoluteFilePath {
+        return this.directory;
+    }
+
     public async installDependencies(logger: Logger): Promise<void> {
+        if (!this.runScripts) {
+            return;
+        }
+
         if (this.hasInstalled) {
             return;
         }
@@ -67,6 +84,10 @@ export class PersistedTypescriptProject {
     }
 
     public async format(logger: Logger): Promise<void> {
+        if (!this.runScripts) {
+            return;
+        }
+
         if (this.hasFormatted) {
             return;
         }
@@ -83,6 +104,10 @@ export class PersistedTypescriptProject {
     }
 
     public async build(logger: Logger): Promise<void> {
+        if (!this.runScripts) {
+            return;
+        }
+
         if (this.hasBuilt) {
             return;
         }
@@ -183,11 +208,13 @@ export class PersistedTypescriptProject {
     public async publish({
         logger,
         publishInfo,
-        dryRun
+        dryRun,
+        shouldTolerateRepublish
     }: {
         logger: Logger;
         publishInfo: PublishInfo;
         dryRun: boolean;
+        shouldTolerateRepublish: boolean;
     }): Promise<void> {
         await this.build(logger);
 
@@ -211,6 +238,9 @@ export class PersistedTypescriptProject {
         const publishCommand = ["publish"];
         if (dryRun) {
             publishCommand.push("--dry-run");
+        }
+        if (shouldTolerateRepublish) {
+            publishCommand.push("--tolerate-republish");
         }
         await npm(publishCommand);
     }

@@ -12,13 +12,18 @@ export declare namespace A {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class A {
-    constructor(protected readonly _options: A.Options) {}
+    constructor(protected readonly _options: A.Options) {
+    }
 
     protected _b: B | undefined;
 

@@ -1,4 +1,4 @@
-import { ROOT_API_FILENAME } from "@fern-api/project-configuration";
+import { ROOT_API_FILENAME } from "@fern-api/configuration";
 import chalk from "chalk";
 import { Rule, RuleViolation } from "../../Rule";
 import { getAllEnvironmentUrlIds } from "../../utils/getAllEnvironmentUriIds";
@@ -10,6 +10,10 @@ export const ValidServiceUrlsRule: Rule = {
 
         const validateBaseUrl = (url: string): RuleViolation[] => {
             if (urlIds.includes(url)) {
+                return [];
+            }
+
+            if (urlIds.length === 0 && workspace.definition.rootApiFile.contents?.["default-url"] != null) {
                 return [];
             }
 
@@ -44,6 +48,10 @@ export const ValidServiceUrlsRule: Rule = {
                     return validateBaseUrl(url);
                 },
                 endpointBaseUrl: ({ baseUrl, service }) => {
+                    if (workspace.definition.rootApiFile.contents?.["default-url"]) {
+                        return [];
+                    }
+
                     if (baseUrl == null) {
                         if (urlIds.length === 0 || service.url != null) {
                             return [];
@@ -55,15 +63,6 @@ export const ValidServiceUrlsRule: Rule = {
                                     '"url" is missing. Please specify one of the configured environment URLs:',
                                     ...urlIds.map((urlId) => `  - ${urlId}`)
                                 ].join("\n")
-                            }
-                        ];
-                    }
-
-                    if (service.url != null) {
-                        return [
-                            {
-                                severity: "error",
-                                message: '"url" cannot be specified on both the service and endpoint'
                             }
                         ];
                     }

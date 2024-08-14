@@ -1,14 +1,13 @@
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { AbsoluteFilePath, dirname, join, RelativeFilePath } from "@fern-api/fs-utils";
 import { TaskContext } from "@fern-api/task-context";
-import { bundle, Config } from "@redocly/openapi-core";
+import { bundle, Config, Source } from "@redocly/openapi-core";
+import { BundleOptions } from "@redocly/openapi-core/lib/bundle";
 import { Plugin } from "@redocly/openapi-core/lib/config";
 import { NodeType } from "@redocly/openapi-core/lib/types";
-import { readFile } from "fs/promises";
-import yaml from "js-yaml";
-import { mergeWith } from "lodash-es";
 import { OpenAPI } from "openapi-types";
-import { FernOpenAPIExtension } from "./v3/extensions/fernExtensions";
+import { mergeWithOverrides } from "./mergeWithOverrides";
+import { FernOpenAPIExtension } from "./openapi/v3/extensions/fernExtensions";
 
 const XFernStreaming: NodeType = {
     properties: {
@@ -48,25 +47,9 @@ export async function loadOpenAPI({
     absolutePathToOpenAPIOverrides: AbsoluteFilePath | undefined;
     context: TaskContext;
 }): Promise<OpenAPI.Document> {
-    const result = await bundle({
-        config: new Config(
-            {
-                apis: {},
-                styleguide: {
-                    plugins: [FERN_TYPE_EXTENSIONS],
-                    rules: {
-                        spec: "warn"
-                    }
-                }
-            },
-            undefined
-        ),
-        ref: absolutePathToOpenAPI,
-        dereference: false,
-        removeUnusedComponents: false,
-        keepUrlRefs: true
+    const parsed = await parseOpenAPI({
+        absolutePathToOpenAPI
     });
-    const parsed = await SwaggerParser.parse(result.bundle.parsed);
 
     let overridesFilepath = undefined;
     if (absolutePathToOpenAPIOverrides != null) {
@@ -81,29 +64,57 @@ export async function loadOpenAPI({
     }
 
     if (overridesFilepath != null) {
-        let parsedOverrides = null;
-        try {
-            const contents = (await readFile(overridesFilepath, "utf8")).toString();
-            try {
-                parsedOverrides = JSON.parse(contents);
-            } catch (err) {
-                parsedOverrides = yaml.load(contents, { json: true });
-            }
-        } catch (err) {
-            return context.failAndThrow(`Failed to read OpenAPI overrides from file ${overridesFilepath}`);
-        }
-
-        const merged = mergeWith({}, parsed, parsedOverrides, (obj, src) =>
-            Array.isArray(obj) && Array.isArray(src)
-                ? src.every((element) => typeof element === "object") &&
-                  obj.every((element) => typeof element === "object")
-                    ? // nested arrays of objects are merged
-                      undefined
-                    : // nested arrays of primitives are replaced
-                      [...src]
-                : undefined
-        ) as OpenAPI.Document;
-        return merged;
+        const merged = await mergeWithOverrides<OpenAPI.Document>({
+            absoluteFilepathToOverrides: overridesFilepath,
+            context,
+            data: parsed
+        });
+        // Run the merged document through the parser again to ensure that any override
+        // references are resolved.
+        return await parseOpenAPI({
+            absolutePathToOpenAPI,
+            parsed: merged
+        });
     }
     return parsed;
+}
+
+async function parseOpenAPI({
+    absolutePathToOpenAPI,
+    parsed
+}: {
+    absolutePathToOpenAPI: AbsoluteFilePath;
+    parsed?: OpenAPI.Document;
+}): Promise<OpenAPI.Document> {
+    const options: BundleOptions = {
+        config: new Config(
+            {
+                apis: {},
+                styleguide: {
+                    plugins: [FERN_TYPE_EXTENSIONS],
+                    rules: {
+                        spec: "warn"
+                    }
+                }
+            },
+            undefined
+        ),
+        dereference: false,
+        removeUnusedComponents: false,
+        keepUrlRefs: true
+    };
+    const result =
+        parsed != null
+            ? await bundle({
+                  ...options,
+                  doc: {
+                      source: new Source(absolutePathToOpenAPI, "<openapi>"),
+                      parsed
+                  }
+              })
+            : await bundle({
+                  ...options,
+                  ref: absolutePathToOpenAPI
+              });
+    return await SwaggerParser.parse(result.bundle.parsed);
 }

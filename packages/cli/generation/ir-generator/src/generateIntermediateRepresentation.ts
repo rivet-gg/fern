@@ -1,8 +1,8 @@
-import { Audiences } from "@fern-api/config-management-commons";
+import { Audiences, FERN_PACKAGE_MARKER_FILENAME, generatorsYml } from "@fern-api/configuration";
 import { noop, visitObject } from "@fern-api/core-utils";
 import { dirname, join, RelativeFilePath } from "@fern-api/fs-utils";
-import { GenerationLanguage } from "@fern-api/generators-configuration";
 import {
+    ExampleType,
     HttpEndpoint,
     IntermediateRepresentation,
     PathParameterLocation,
@@ -10,49 +10,63 @@ import {
     ServiceId,
     ServiceTypeReferenceInfo,
     Type,
-    TypeId
+    TypeId,
+    Webhook
 } from "@fern-api/ir-sdk";
-import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/project-configuration";
 import { FernWorkspace, visitAllDefinitionFiles, visitAllPackageMarkers } from "@fern-api/workspace-loader";
 import { mapValues, pickBy } from "lodash-es";
 import { constructCasingsGenerator } from "./casings/CasingsGenerator";
 import { generateFernConstants } from "./converters/constants";
 import { convertApiAuth } from "./converters/convertApiAuth";
+import { convertApiVersionScheme } from "./converters/convertApiVersionScheme";
+import { convertChannel } from "./converters/convertChannel";
 import { getAudiences } from "./converters/convertDeclaration";
 import { convertEnvironments } from "./converters/convertEnvironments";
 import { convertErrorDeclaration } from "./converters/convertErrorDeclaration";
 import { convertErrorDiscriminationStrategy } from "./converters/convertErrorDiscriminationStrategy";
+import { convertReadmeConfig } from "./converters/convertReadmeConfig";
 import { convertWebhookGroup } from "./converters/convertWebhookGroup";
 import { constructHttpPath } from "./converters/services/constructHttpPath";
 import { convertHttpHeader, convertHttpService, convertPathParameters } from "./converters/services/convertHttpService";
 import { convertTypeDeclaration } from "./converters/type-declarations/convertTypeDeclaration";
+import { ExampleGenerator } from "./examples/ExampleGenerator";
+import { addExtendedPropertiesToIr } from "./extended-properties/addExtendedPropertiesToIr";
 import { constructFernFileContext, constructRootApiFileContext, FernFileContext } from "./FernFileContext";
 import { FilteredIr } from "./filtered-ir/FilteredIr";
 import { IrGraph } from "./filtered-ir/IrGraph";
+import { filterEndpointExample, filterExampleType } from "./filterExamples";
 import { formatDocs } from "./formatDocs";
 import { IdGenerator } from "./IdGenerator";
 import { PackageTreeGenerator } from "./PackageTreeGenerator";
+import { EndpointResolverImpl } from "./resolvers/EndpointResolver";
 import { ErrorResolverImpl } from "./resolvers/ErrorResolver";
 import { ExampleResolverImpl } from "./resolvers/ExampleResolver";
+import { PropertyResolverImpl } from "./resolvers/PropertyResolver";
 import { TypeResolverImpl } from "./resolvers/TypeResolver";
 import { VariableResolverImpl } from "./resolvers/VariableResolver";
 import { convertToFernFilepath } from "./utils/convertToFernFilepath";
 import { parseErrorName } from "./utils/parseErrorName";
 
 export async function generateIntermediateRepresentation({
+    fdrApiDefinitionId,
     workspace,
     generationLanguage,
+    keywords,
     smartCasing,
     disableExamples,
-    audiences
+    audiences,
+    readme
 }: {
+    fdrApiDefinitionId?: string;
     workspace: FernWorkspace;
-    generationLanguage: GenerationLanguage | undefined;
+    generationLanguage: generatorsYml.GenerationLanguage | undefined;
+    keywords: string[] | undefined;
     smartCasing: boolean;
     disableExamples: boolean;
     audiences: Audiences;
+    readme: generatorsYml.ReadmeSchema | undefined;
 }): Promise<IntermediateRepresentation> {
-    const casingsGenerator = constructCasingsGenerator({ generationLanguage, smartCasing });
+    const casingsGenerator = constructCasingsGenerator({ generationLanguage, keywords, smartCasing });
 
     const irGraph = new IrGraph(audiences);
 
@@ -71,17 +85,26 @@ export async function generateIntermediateRepresentation({
     );
 
     const typeResolver = new TypeResolverImpl(workspace);
+    const endpointResolver = new EndpointResolverImpl(workspace);
+    const propertyResolver = new PropertyResolverImpl(typeResolver, endpointResolver);
     const errorResolver = new ErrorResolverImpl(workspace);
     const exampleResolver = new ExampleResolverImpl(typeResolver);
     const variableResolver = new VariableResolverImpl();
 
     const intermediateRepresentation: Omit<IntermediateRepresentation, "sdkConfig" | "subpackages" | "rootPackage"> = {
-        apiName: casingsGenerator.generateName(workspace.name),
+        fdrApiDefinitionId,
+        apiVersion: await convertApiVersionScheme({
+            file: rootApiFileContext,
+            rawApiFileSchema: workspace.definition.rootApiFile.contents
+        }),
+        apiName: casingsGenerator.generateName(workspace.definition.rootApiFile.contents.name),
         apiDisplayName: workspace.definition.rootApiFile.contents["display-name"],
         apiDocs: await formatDocs(workspace.definition.rootApiFile.contents.docs),
-        auth: convertApiAuth({
+        auth: await convertApiAuth({
             rawApiFileSchema: workspace.definition.rootApiFile.contents,
-            file: rootApiFileContext
+            file: rootApiFileContext,
+            propertyResolver,
+            endpointResolver
         }),
         headers:
             workspace.definition.rootApiFile.contents.headers != null
@@ -134,7 +157,9 @@ export async function generateIntermediateRepresentation({
             typesReferencedOnlyByService: {},
             sharedTypes: []
         },
-        webhookGroups: {}
+        webhookGroups: {},
+        websocketChannels: {},
+        readmeConfig: undefined
     };
 
     const packageTreeGenerator = new PackageTreeGenerator();
@@ -166,7 +191,8 @@ export async function generateIntermediateRepresentation({
                     });
                     const convertedTypeDeclaration = convertedTypeDeclarationWithFilepaths.typeDeclaration;
                     if (disableExamples) {
-                        convertedTypeDeclaration.examples = [];
+                        convertedTypeDeclaration.userProvidedExamples = [];
+                        convertedTypeDeclaration.autogeneratedExamples = [];
                     }
                     const subpackageFilepaths = convertedTypeDeclarationWithFilepaths.descendantFilepaths;
 
@@ -197,7 +223,10 @@ export async function generateIntermediateRepresentation({
                     const convertedErrorDeclaration = convertErrorDeclaration({
                         errorName,
                         errorDeclaration,
-                        file
+                        file,
+                        typeResolver,
+                        exampleResolver,
+                        workspace
                     });
 
                     const errorId = IdGenerator.generateErrorId(convertedErrorDeclaration.name);
@@ -214,11 +243,13 @@ export async function generateIntermediateRepresentation({
                 }
 
                 const convertedHttpService = await convertHttpService({
+                    rootDefaultUrl: file.defaultUrl ?? workspace.definition.rootApiFile.contents["default-url"],
                     rootPathParameters: intermediateRepresentation.pathParameters,
                     serviceDefinition: service,
                     file,
                     errorResolver,
                     typeResolver,
+                    propertyResolver,
                     exampleResolver,
                     globalErrors,
                     variableResolver,
@@ -232,7 +263,8 @@ export async function generateIntermediateRepresentation({
                 const convertedEndpoints: Record<string, HttpEndpoint> = {};
                 convertedHttpService.endpoints.forEach((httpEndpoint) => {
                     if (disableExamples) {
-                        httpEndpoint.examples = [];
+                        httpEndpoint.autogeneratedExamples = [];
+                        httpEndpoint.userSpecifiedExamples = [];
                     }
                     const rawEndpointSchema = service.endpoints[httpEndpoint.name.originalName];
                     irGraph.addEndpoint(convertedHttpService, httpEndpoint, rawEndpointSchema);
@@ -261,20 +293,61 @@ export async function generateIntermediateRepresentation({
                     return;
                 }
                 const webhookGroupId = IdGenerator.generateWebhookGroupId(file.fernFilepath);
-                const convertedWebhookGroup = await convertWebhookGroup({ webhooks, file });
+                const convertedWebhookGroup = await convertWebhookGroup({
+                    webhooks,
+                    file,
+                    typeResolver,
+                    exampleResolver,
+                    workspace
+                });
+
+                const webhooksByOriginalName: Record<string, Webhook> = {};
+                for (const convertedWebhook of convertedWebhookGroup) {
+                    webhooksByOriginalName[convertedWebhook.name.originalName] = convertedWebhook;
+                }
+
+                Object.entries(webhooks).forEach(([key, webhook]) => {
+                    const irWebhook = webhooksByOriginalName[key];
+                    if (irWebhook != null) {
+                        irGraph.addWebhook(file, irWebhook, webhook);
+                        if (webhook.audiences != null) {
+                            irGraph.markWebhookForAudiences(file, irWebhook, webhook.audiences);
+                        }
+                    }
+                });
+
                 intermediateRepresentation.webhookGroups[webhookGroupId] = convertedWebhookGroup;
                 packageTreeGenerator.addWebhookGroup(webhookGroupId, file.fernFilepath);
+            },
+            channel: async (channel) => {
+                if (channel == null) {
+                    return;
+                }
+                const websocketChannelId = IdGenerator.generateWebSocketChannelId(file.fernFilepath);
+                const websocketChannel = await convertChannel({
+                    channel,
+                    file,
+                    variableResolver,
+                    typeResolver,
+                    exampleResolver,
+                    workspace
+                });
+                if (intermediateRepresentation.websocketChannels != null) {
+                    intermediateRepresentation.websocketChannels[websocketChannelId] = websocketChannel;
+                    packageTreeGenerator.addWebSocketChannel(websocketChannelId, file.fernFilepath);
+                }
             }
         });
     };
 
-    await visitAllDefinitionFiles(workspace, async (relativeFilepath, file) => {
+    await visitAllDefinitionFiles(workspace, async (relativeFilepath, file, metadata) => {
         await visitDefinitionFile(
             constructFernFileContext({
                 relativeFilepath,
                 definitionFile: file,
                 casingsGenerator,
-                rootApiFile: workspace.definition.rootApiFile.contents
+                rootApiFile: workspace.definition.rootApiFile.contents,
+                defaultUrl: metadata.defaultUrl
             })
         );
     });
@@ -320,9 +393,13 @@ export async function generateIntermediateRepresentation({
 
     intermediateRepresentation.serviceTypeReferenceInfo = computeServiceTypeReferenceInfo(irGraph);
 
+    const intermediateRepresentationWithGeneratedExamples = new ExampleGenerator(
+        intermediateRepresentation
+    ).enrichWithAutogeneratedExamples();
+
     const filteredIr = !irGraph.hasNoAudiences() ? irGraph.build() : undefined;
     const intermediateRepresentationForAudiences = filterIntermediateRepresentationForAudiences(
-        intermediateRepresentation,
+        intermediateRepresentationWithGeneratedExamples,
         filteredIr
     );
 
@@ -333,26 +410,39 @@ export async function generateIntermediateRepresentation({
         });
 
     const hasStreamingEndpoints = Object.values(intermediateRepresentationForAudiences.services).some((service) => {
-        return service.endpoints.some((endpoint) => endpoint.response?.type === "streaming");
+        return service.endpoints.some((endpoint) => endpoint.response?.body?.type === "streaming");
+    });
+
+    const hasPaginatedEndpoints = Object.values(intermediateRepresentationForAudiences.services).some((service) => {
+        return service.endpoints.some((endpoint) => endpoint.pagination != null);
     });
 
     const hasFileDownloadEndpoints = Object.values(intermediateRepresentationForAudiences.services).some((service) => {
-        return service.endpoints.some((endpoint) => endpoint.response?.type === "fileDownload");
+        return service.endpoints.some((endpoint) => endpoint.response?.body?.type === "fileDownload");
     });
+
+    const readmeConfig =
+        readme != null ? convertReadmeConfig({ readme, services: intermediateRepresentation.services }) : undefined;
+
+    const { types, services } = addExtendedPropertiesToIr(intermediateRepresentationForAudiences);
 
     return {
         ...intermediateRepresentationForAudiences,
         ...packageTreeGenerator.build(filteredIr),
+        types,
+        services,
         sdkConfig: {
             isAuthMandatory,
             hasStreamingEndpoints,
+            hasPaginatedEndpoints,
             hasFileDownloadEndpoints,
             platformHeaders: {
                 language: "X-Fern-Language",
                 sdkName: "X-Fern-SDK-Name",
                 sdkVersion: "X-Fern-SDK-Version"
             }
-        }
+        },
+        readmeConfig
     };
 }
 
@@ -388,6 +478,9 @@ function filterIntermediateRepresentationForAudiences(
     const filteredTypesAndProperties = Object.fromEntries(
         Object.entries(filteredTypes).map(([typeId, typeDeclaration]) => {
             const filteredProperties = [];
+            typeDeclaration.userProvidedExamples = typeDeclaration.userProvidedExamples
+                .map((example) => filterExampleType({ filteredIr, exampleType: example }))
+                .filter((ex) => ex !== undefined) as ExampleType[];
             if (typeDeclaration.shape.type === "object") {
                 for (const property of typeDeclaration.shape.properties) {
                     const hasProperty = filteredIr.hasProperty(typeId, property.name.wireValue);
@@ -395,6 +488,7 @@ function filterIntermediateRepresentationForAudiences(
                         filteredProperties.push(property);
                     }
                 }
+
                 return [
                     typeId,
                     {
@@ -410,6 +504,26 @@ function filterIntermediateRepresentationForAudiences(
         })
     );
 
+    const filteredWebhookGroups = Object.fromEntries(
+        Object.entries(intermediateRepresentation.webhookGroups).map(([webhookGroupId, webhookGroup]) => {
+            const filteredWebhooks = webhookGroup
+                .filter((webhook) => filteredIr.hasWebhook(webhook))
+                .map((webhook) => {
+                    const webhookId = webhook.id;
+                    if (webhook.payload.type === "inlinedPayload" && webhookId != null) {
+                        webhook.payload = {
+                            ...webhook.payload,
+                            properties: webhook.payload.properties.filter((property) => {
+                                return filteredIr.hasWebhookPayloadProperty(webhookId, property.name.wireValue);
+                            })
+                        };
+                    }
+                    return webhook;
+                });
+            return [webhookGroupId, filteredWebhooks];
+        })
+    );
+
     return {
         ...intermediateRepresentation,
         types: filteredTypesAndProperties,
@@ -421,6 +535,26 @@ function filterIntermediateRepresentationForAudiences(
                 endpoints: httpService.endpoints
                     .filter((httpEndpoint) => filteredIr.hasEndpoint(httpEndpoint))
                     .map((httpEndpoint) => {
+                        httpEndpoint.autogeneratedExamples = httpEndpoint.autogeneratedExamples.map((autogenerated) => {
+                            return {
+                                ...autogenerated,
+                                example: filterEndpointExample({ filteredIr, example: autogenerated.example })
+                            };
+                        });
+                        httpEndpoint.userSpecifiedExamples = httpEndpoint.userSpecifiedExamples.map((userSpecified) => {
+                            return {
+                                ...userSpecified,
+                                example:
+                                    userSpecified.example != null
+                                        ? filterEndpointExample({ filteredIr, example: userSpecified.example })
+                                        : undefined
+                            };
+                        });
+                        if (httpEndpoint.queryParameters.length > 0) {
+                            httpEndpoint.queryParameters = httpEndpoint.queryParameters.filter((queryParameter) => {
+                                return filteredIr.hasQueryParameter(httpEndpoint.id, queryParameter.name.wireValue);
+                            });
+                        }
                         if (httpEndpoint.requestBody?.type === "inlinedRequestBody") {
                             return {
                                 ...httpEndpoint,
@@ -436,6 +570,7 @@ function filterIntermediateRepresentationForAudiences(
                     })
             })
         ),
+        webhookGroups: filteredWebhookGroups,
         serviceTypeReferenceInfo: filterServiceTypeReferenceInfoForAudiences(
             intermediateRepresentation.serviceTypeReferenceInfo,
             filteredIr

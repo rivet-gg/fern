@@ -68,7 +68,8 @@ export async function visitTypeDeclaration({
                     docs: createDocsVisitor(visitor, nodePathForType),
                     availability: noop,
                     audiences: noop,
-                    examples: visitExamples
+                    examples: visitExamples,
+                    validation: noop
                 });
             }
         },
@@ -101,13 +102,19 @@ export async function visitTypeDeclaration({
                                 docs: createDocsVisitor(visitor, nodePathForProperty),
                                 availability: noop,
                                 type: async (type) => {
-                                    await visitTypeReference(type, [...nodePathForProperty, "type"]);
+                                    await visitTypeReference(type, [...nodePathForProperty, "type"], {
+                                        _default: property.default,
+                                        validation: property.validation
+                                    });
                                 },
-                                audiences: noop
+                                audiences: noop,
+                                default: noop,
+                                validation: noop
                             });
                         }
                     }
                 },
+                ["extra-properties"]: noop,
                 availability: noop,
                 audiences: noop,
                 examples: visitExamples
@@ -189,13 +196,15 @@ export async function visitTypeDeclaration({
                             await visitObject(enumType, {
                                 docs: createDocsVisitor(visitor, nodePathForEnumType),
                                 name: noop,
-                                value: noop
+                                value: noop,
+                                casing: noop
                             });
                         }
                     }
                 },
                 availability: noop,
                 audiences: noop,
+                default: noop,
                 examples: visitExamples
             });
         }

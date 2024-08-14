@@ -20,8 +20,13 @@ export class ExpressGeneratorCli extends AbstractGeneratorCli<ExpressCustomConfi
             includeOtherInUnionTypes: parsed?.includeOtherInUnionTypes ?? false,
             treatUnknownAsAny: parsed?.treatUnknownAsAny ?? false,
             noSerdeLayer,
+            requestValidationStatusCode: parsed?.requestValidationStatusCode ?? 422,
             outputEsm: parsed?.outputEsm ?? false,
-            outputSourceFiles: parsed?.outputSourceFiles ?? false
+            outputSourceFiles: parsed?.outputSourceFiles ?? false,
+            retainOriginalCasing: parsed?.retainOriginalCasing ?? false,
+            allowExtraFields: parsed?.allowExtraFields ?? false,
+            skipRequestValidation: parsed?.skipRequestValidation ?? false,
+            skipResponseValidation: parsed?.skipResponseValidation ?? false
         };
     }
 
@@ -53,14 +58,20 @@ export class ExpressGeneratorCli extends AbstractGeneratorCli<ExpressCustomConfi
                 includeOtherInUnionTypes: customConfig.includeOtherInUnionTypes,
                 treatUnknownAsAny: customConfig.treatUnknownAsAny,
                 includeSerdeLayer: !customConfig.noSerdeLayer,
-                outputEsm: customConfig.outputEsm
+                outputEsm: customConfig.outputEsm,
+                retainOriginalCasing: customConfig.retainOriginalCasing,
+                allowExtraFields: customConfig.allowExtraFields,
+                skipRequestValidation: customConfig.skipRequestValidation,
+                skipResponseValidation: customConfig.skipResponseValidation,
+                requestValidationStatusCode: customConfig.requestValidationStatusCode
             }
         });
 
         const typescriptProject = await expressGenerator.generate();
         const persistedTypescriptProject = await typescriptProject.persist();
         await expressGenerator.copyCoreUtilities({
-            pathToSrc: persistedTypescriptProject.getSrcDirectory()
+            pathToSrc: persistedTypescriptProject.getSrcDirectory(),
+            pathToRoot: persistedTypescriptProject.getRootDirectory()
         });
 
         return persistedTypescriptProject;
@@ -72,5 +83,13 @@ export class ExpressGeneratorCli extends AbstractGeneratorCli<ExpressCustomConfi
 
     protected outputSourceFiles(customConfig: ExpressCustomConfig): boolean {
         return customConfig.outputSourceFiles;
+    }
+
+    protected shouldTolerateRepublish(customConfig: ExpressCustomConfig): boolean {
+        return false;
+    }
+
+    protected publishToJsr(customConfig: ExpressCustomConfig): boolean {
+        return false;
     }
 }

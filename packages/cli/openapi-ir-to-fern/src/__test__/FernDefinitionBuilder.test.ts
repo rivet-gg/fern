@@ -3,23 +3,32 @@ import { FernDefinitionBuilderImpl } from "../FernDefnitionBuilder";
 
 describe("Fern Definition Builder", () => {
     it("removes base path from environment", async () => {
-        const builder = new FernDefinitionBuilderImpl({
-            title: undefined,
-            description: undefined,
-            servers: [],
-            tags: {
-                tagsById: {},
-                orderedTagIds: []
+        const builder = new FernDefinitionBuilderImpl(
+            {
+                apiVersion: undefined,
+                title: undefined,
+                description: undefined,
+                basePath: undefined,
+                servers: [],
+                tags: {
+                    tagsById: {},
+                    orderedTagIds: []
+                },
+                hasEndpointsMarkedInternal: false,
+                endpoints: [],
+                webhooks: [],
+                schemas: {},
+                variables: {},
+                nonRequestReferencedSchemas: new Set(),
+                securitySchemes: {},
+                globalHeaders: [],
+                idempotencyHeaders: [],
+                groups: {},
+                channel: []
             },
-            hasEndpointsMarkedInternal: false,
-            endpoints: [],
-            webhooks: [],
-            schemas: {},
-            errors: {},
-            variables: {},
-            nonRequestReferencedSchemas: [],
-            securitySchemes: {}
-        });
+            true,
+            false
+        );
         builder.addEnvironment({
             name: "Production",
             schema: "https://buildwithfern.com/api/v1"

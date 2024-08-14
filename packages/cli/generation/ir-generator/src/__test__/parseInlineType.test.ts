@@ -7,12 +7,18 @@ import { parseInlineType } from "../utils/parseInlineType";
 
 describe("parse inline types", () => {
     it("nested containers", async () => {
-        const casingsGenerator = constructCasingsGenerator({ generationLanguage: undefined, smartCasing: false });
+        const casingsGenerator = constructCasingsGenerator({
+            generationLanguage: undefined,
+            keywords: undefined,
+            smartCasing: false
+        });
 
         const dummyTypeName = "Dummy";
         const dummyFilepath = RelativeFilePath.of("a/b/c");
         const parsedTypeReference = parseInlineType({
             type: "optional<list<" + dummyTypeName + ">>",
+            _default: undefined,
+            validation: undefined,
             file: constructFernFileContext({
                 relativeFilepath: dummyFilepath,
                 definitionFile: {},
@@ -32,7 +38,9 @@ describe("parse inline types", () => {
                                 relativeFilepath: dummyFilepath,
                                 casingsGenerator
                             }),
-                            name: casingsGenerator.generateName(dummyTypeName)
+                            name: casingsGenerator.generateName(dummyTypeName),
+                            default: undefined,
+                            inline: undefined
                         })
                     )
                 )

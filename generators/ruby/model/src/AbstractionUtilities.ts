@@ -1,13 +1,12 @@
 import {
     ClassReferenceFactory,
+    Class_,
     DiscriminatedUnion,
     Enum,
-    EnumReference,
     Expression,
     Property,
     SerializableObject,
-    UndiscriminatedUnion,
-    Yardoc
+    UndiscriminatedUnion
 } from "@fern-api/ruby-codegen";
 import {
     AliasTypeDeclaration,
@@ -32,29 +31,12 @@ export function generateAliasDefinitionFromTypeDeclaration(
 }
 
 export function generateEnumDefinitionFromTypeDeclaration(
+    classReferenceFactory: ClassReferenceFactory,
     enumTypeDeclaration: EnumTypeDeclaration,
     typeDeclaration: TypeDeclaration
-): Expression {
-    const name = typeDeclaration.name.name.screamingSnakeCase.safeName;
-    const contents = new Map(
-        enumTypeDeclaration.values.map((enumValue) => [
-            enumValue.name.name.snakeCase.safeName,
-            enumValue.name.wireValue
-        ])
-    );
-    const enum_ = new Enum({ name, contents, documentation: typeDeclaration.docs });
-
-    const yardoc = new Yardoc({
-        reference: { name: "typeReference", type: new EnumReference({ name }) }
-    });
-
-    return new Expression({
-        leftSide: name,
-        rightSide: enum_,
-        isAssignment: true,
-        documentation: typeDeclaration.docs,
-        yardoc
-    });
+): Class_ {
+    const classReference = classReferenceFactory.fromTypeDeclaration(typeDeclaration);
+    return new Enum({ enumTypeDeclaration, classReference, documentation: typeDeclaration.docs });
 }
 
 function isTypeOptional(typeReference: TypeReference): boolean {
@@ -86,7 +68,7 @@ export function generateSerializableObjectFromTypeDeclaration(
     const properties = (propertyOverrides.get(typeId) ?? objectTypeDeclaration.properties).map(
         (property) =>
             new Property({
-                name: property.name.name.snakeCase.safeName,
+                name: Property.getNameFromIr(property.name.name),
                 type: classReferenceFactory.fromTypeReference(property.valueType),
                 documentation: property.docs,
                 wireValue: property.name.wireValue,
@@ -112,7 +94,7 @@ export function generateUnionFromTypeDeclaration(
     const properties = (propertyOverrides.get(typeId) ?? unionTypeDeclaration.baseProperties).map(
         (property) =>
             new Property({
-                name: property.name.name.snakeCase.safeName,
+                name: Property.getNameFromIr(property.name.name),
                 type: classReferenceFactory.fromTypeReference(property.valueType),
                 documentation: property.docs,
                 wireValue: property.name.wireValue,

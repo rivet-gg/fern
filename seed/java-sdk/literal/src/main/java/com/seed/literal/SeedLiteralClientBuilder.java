@@ -9,6 +9,10 @@ import com.seed.literal.core.Environment;
 public final class SeedLiteralClientBuilder {
     private ClientOptions.Builder clientOptionsBuilder = ClientOptions.builder();
 
+    private String version = "02-02-2024";
+
+    private String auditLogging = "true";
+
     private Environment environment;
 
     public SeedLiteralClientBuilder url(String url) {
@@ -17,6 +21,8 @@ public final class SeedLiteralClientBuilder {
     }
 
     public SeedLiteralClient build() {
+        this.clientOptionsBuilder.addHeader("X-API-Version", this.version);
+        this.clientOptionsBuilder.addHeader("X-API-Enable-Audit-Logging", this.auditLogging);
         clientOptionsBuilder.environment(this.environment);
         return new SeedLiteralClient(clientOptionsBuilder.build());
     }

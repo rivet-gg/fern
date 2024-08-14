@@ -4,49 +4,71 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..v_2.resources.problem.test_case_id import TestCaseId
 from .error_info import ErrorInfo
-from .graded_test_case_update import GradedTestCaseUpdate
-from .recorded_test_case_update import RecordedTestCaseUpdate
 from .running_submission_state import RunningSubmissionState
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from .test_case_grade import TestCaseGrade
 
 
-class TestSubmissionUpdateInfo_Running(pydantic.BaseModel):
-    type: typing_extensions.Literal["running"]
+class TestSubmissionUpdateInfo_Running(UniversalBaseModel):
     value: RunningSubmissionState
+    type: typing.Literal["running"] = "running"
 
 
-class TestSubmissionUpdateInfo_Stopped(pydantic.BaseModel):
-    type: typing_extensions.Literal["stopped"]
+class TestSubmissionUpdateInfo_Stopped(UniversalBaseModel):
+    type: typing.Literal["stopped"] = "stopped"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class TestSubmissionUpdateInfo_Errored(pydantic.BaseModel):
-    type: typing_extensions.Literal["errored"]
+class TestSubmissionUpdateInfo_Errored(UniversalBaseModel):
     value: ErrorInfo
+    type: typing.Literal["errored"] = "errored"
 
 
-class TestSubmissionUpdateInfo_GradedTestCase(GradedTestCaseUpdate):
-    type: typing_extensions.Literal["gradedTestCase"]
+class TestSubmissionUpdateInfo_GradedTestCase(UniversalBaseModel):
+    type: typing.Literal["gradedTestCase"] = "gradedTestCase"
+    test_case_id: TestCaseId = pydantic.Field(alias="testCaseId")
+    grade: TestCaseGrade
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class TestSubmissionUpdateInfo_RecordedTestCase(RecordedTestCaseUpdate):
-    type: typing_extensions.Literal["recordedTestCase"]
+class TestSubmissionUpdateInfo_RecordedTestCase(UniversalBaseModel):
+    type: typing.Literal["recordedTestCase"] = "recordedTestCase"
+    test_case_id: TestCaseId = pydantic.Field(alias="testCaseId")
+    trace_responses_size: int = pydantic.Field(alias="traceResponsesSize")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class TestSubmissionUpdateInfo_Finished(pydantic.BaseModel):
-    type: typing_extensions.Literal["finished"]
+class TestSubmissionUpdateInfo_Finished(UniversalBaseModel):
+    type: typing.Literal["finished"] = "finished"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 TestSubmissionUpdateInfo = typing.Union[

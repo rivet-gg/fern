@@ -10,6 +10,7 @@ import (
 	"github.com/fern-api/fern-go/internal/ast"
 	"github.com/fern-api/fern-go/internal/fern/ir"
 	"github.com/fern-api/fern-go/internal/gospec"
+	generatorexec "github.com/fern-api/generator-exec-go"
 )
 
 // goLanguageHeader is the identifier used for the X-Fern-Language platform header.
@@ -30,6 +31,12 @@ var (
 
 	//go:embed sdk/core/optional_test.go
 	optionalTestFile string
+
+	//go:embed sdk/core/page.go
+	pageFile string
+
+	//go:embed sdk/core/pager.go
+	pagerFile string
 
 	//go:embed sdk/core/pointer.go
 	pointerFile string
@@ -251,7 +258,7 @@ func (f *fileWriter) WriteIdempotentRequestOptionsDefinition(idempotencyHeaders 
 	f.P("func (i *IdempotentRequestOptions) ToHeader() http.Header {")
 	f.P("header := i.RequestOptions.ToHeader()")
 	for _, header := range idempotencyHeaders {
-		valueTypeFormat := formatForValueType(header.ValueType)
+		valueTypeFormat := formatForValueType(header.ValueType, f.types)
 		value := valueTypeFormat.Prefix + "i." + header.Name.Name.PascalCase.UnsafeName + valueTypeFormat.Suffix
 		f.P("if i.", header.Name.Name.PascalCase.UnsafeName, " != ", valueTypeFormat.ZeroValue, " {")
 		f.P(`header.Set("`, header.Name.WireValue, `", fmt.Sprintf("`, valueTypeFormat.Prefix, `%v",`, value, "))")
@@ -379,15 +386,11 @@ func (f *fileWriter) WriteRequestOptionsDefinition(
 				f.P(`header.Set("`, header.Name.WireValue, `", fmt.Sprintf("`, prefix, `%v",`, literalToValue(header.ValueType.Container.Literal), "))")
 				continue
 			}
-			valueTypeFormat := formatForValueType(header.ValueType)
+			valueTypeFormat := formatForValueType(header.ValueType, f.types)
 			value := valueTypeFormat.Prefix + "r." + header.Name.Name.PascalCase.UnsafeName + valueTypeFormat.Suffix
-			if valueTypeFormat.IsOptional {
-				f.P("if r.", header.Name.Name.PascalCase.UnsafeName, " != nil {")
-				f.P(`header.Set("`, header.Name.WireValue, `", fmt.Sprintf("`, prefix, `%v",`, value, "))")
-				f.P("}")
-			} else {
-				f.P(`header.Set("`, header.Name.WireValue, `", fmt.Sprintf("`, prefix, `%v",`, value, "))")
-			}
+			f.P("if r.", header.Name.Name.PascalCase.UnsafeName, " != ", valueTypeFormat.ZeroValue, " {")
+			f.P(`header.Set("`, header.Name.WireValue, `", fmt.Sprintf("`, prefix, `%v",`, value, "))")
+			f.P("}")
 		}
 	}
 	for _, header := range headers {
@@ -395,7 +398,7 @@ func (f *fileWriter) WriteRequestOptionsDefinition(
 			f.P(`header.Set("`, header.Name.WireValue, `", fmt.Sprintf("%v",`, literalToValue(header.ValueType.Container.Literal), "))")
 			continue
 		}
-		valueTypeFormat := formatForValueType(header.ValueType)
+		valueTypeFormat := formatForValueType(header.ValueType, f.types)
 		value := valueTypeFormat.Prefix + "r." + header.Name.Name.PascalCase.UnsafeName + valueTypeFormat.Suffix
 		if valueTypeFormat.IsOptional {
 			f.P("if r.", header.Name.Name.PascalCase.UnsafeName, " != nil {")
@@ -563,7 +566,8 @@ func (f *fileWriter) writeOptionStruct(
 }
 
 type GeneratedAuth struct {
-	Option ast.Expr // e.g. acmeclient.WithAuthToken("<YOUR_AUTH_TOKEN>")
+	Option          ast.Expr // e.g. acmeclient.WithAuthToken("<YOUR_AUTH_TOKEN>")
+	EnvironmentVars []string // e.g. ACME_API_KEY
 }
 
 // WriteIdempotentRequestOptions writes the idempotent request options available to the
@@ -652,7 +656,10 @@ func (f *fileWriter) WriteRequestOptions(
 	// Generate the auth functional options.
 	includeCustomAuthDocs := auth.Docs != nil && len(*auth.Docs) > 0
 
-	var option ast.Expr
+	var (
+		option          ast.Expr
+		environmentVars []string
+	)
 	for i, authScheme := range auth.Schemes {
 		if authScheme.Bearer != nil {
 			var (
@@ -662,14 +669,17 @@ func (f *fileWriter) WriteRequestOptions(
 			)
 			if i == 0 {
 				option = ast.NewCallExpr(
-					ast.NewImportedObject(
+					ast.NewImportedReference(
 						optionName,
 						importPath,
 					),
 					[]ast.Expr{
-						ast.NewLocalObject(`"<YOUR_AUTH_TOKEN>"`),
+						ast.NewBasicLit(`"<YOUR_AUTH_TOKEN>"`),
 					},
 				)
+				if authScheme.Bearer.TokenEnvVar != nil {
+					environmentVars = append(environmentVars, *authScheme.Bearer.TokenEnvVar)
+				}
 			}
 			f.P("// ", optionName, " sets the 'Authorization: Bearer <", camelCase, ">' request header.")
 			if includeCustomAuthDocs {
@@ -687,15 +697,19 @@ func (f *fileWriter) WriteRequestOptions(
 		if authScheme.Basic != nil {
 			if i == 0 {
 				option = ast.NewCallExpr(
-					ast.NewImportedObject(
+					ast.NewImportedReference(
 						"WithBasicAuth",
 						importPath,
 					),
 					[]ast.Expr{
-						ast.NewLocalObject(`"<YOUR_USERNAME>"`),
-						ast.NewLocalObject(`"<YOUR_PASSWORD>"`),
+						ast.NewBasicLit(`"<YOUR_USERNAME>"`),
+						ast.NewBasicLit(`"<YOUR_PASSWORD>"`),
 					},
 				)
+				if authScheme.Basic.UsernameEnvVar != nil && authScheme.Basic.PasswordEnvVar != nil {
+					environmentVars = append(environmentVars, *authScheme.Basic.UsernameEnvVar)
+					environmentVars = append(environmentVars, *authScheme.Basic.PasswordEnvVar)
+				}
 			}
 			f.P("// WithBasicAuth sets the 'Authorization: Basic <base64>' request header.")
 			if includeCustomAuthDocs {
@@ -725,14 +739,17 @@ func (f *fileWriter) WriteRequestOptions(
 			)
 			if i == 0 {
 				option = ast.NewCallExpr(
-					ast.NewImportedObject(
+					ast.NewImportedReference(
 						optionName,
 						importPath,
 					),
 					[]ast.Expr{
-						ast.NewLocalObject(fmt.Sprintf(`"<YOUR_%s>"`, pascalCase)),
+						ast.NewBasicLit(fmt.Sprintf(`"<YOUR_%s>"`, pascalCase)),
 					},
 				)
+				if authScheme.Header.HeaderEnvVar != nil {
+					environmentVars = append(environmentVars, *authScheme.Header.HeaderEnvVar)
+				}
 			}
 			f.P("// ", optionName, " sets the ", param, " auth request header.")
 			if includeCustomAuthDocs {
@@ -780,24 +797,32 @@ func (f *fileWriter) WriteRequestOptions(
 		return nil, nil
 	}
 	return &GeneratedAuth{
-		Option: option,
+		Option:          option,
+		EnvironmentVars: environmentVars,
 	}, nil
 }
 
 type GeneratedClient struct {
 	Instantiation *ast.AssignStmt
+	Endpoints     []*GeneratedEndpoint
+}
+
+type GeneratedEndpoint struct {
+	Identifier *generatorexec.EndpointIdentifier
+	Snippet    ast.Expr
 }
 
 // WriteClient writes a client for interacting with the given service.
 func (f *fileWriter) WriteClient(
+	irAuth *ir.ApiAuth,
 	irEndpoints []*ir.HttpEndpoint,
+	headers []*ir.HttpHeader,
 	idempotencyHeaders []*ir.HttpHeader,
 	subpackages []*ir.Subpackage,
 	environmentsConfig *ir.EnvironmentsConfig,
 	errorDiscriminationStrategy *ir.ErrorDiscriminationStrategy,
 	fernFilepath *ir.FernFilepath,
-	generatedAuth *GeneratedAuth,
-	generatedEnvironment *GeneratedEnvironment,
+	rootClientInstantiation *ast.AssignStmt,
 ) (*GeneratedClient, error) {
 	var (
 		clientName = "Client"
@@ -837,6 +862,37 @@ func (f *fileWriter) WriteClient(
 	// Generate the client constructor.
 	f.P("func New", clientName, "(opts ...option.RequestOption) *", clientName, " {")
 	f.P("options := core.NewRequestOptions(opts...)")
+	for _, authScheme := range irAuth.Schemes {
+		if authScheme.Bearer != nil && authScheme.Bearer.TokenEnvVar != nil {
+			f.P("if options.", authScheme.Bearer.Token.PascalCase.UnsafeName, ` == "" {`)
+			f.P("options. ", authScheme.Bearer.Token.PascalCase.UnsafeName, ` = os.Getenv("`, *authScheme.Bearer.TokenEnvVar, `")`)
+			f.P("}")
+			continue
+		}
+		if authScheme.Basic != nil && authScheme.Basic.UsernameEnvVar != nil && authScheme.Basic.PasswordEnvVar != nil {
+			f.P("if options.", authScheme.Basic.Username.PascalCase.UnsafeName, ` == "" {`)
+			f.P("options. ", authScheme.Basic.Username.PascalCase.UnsafeName, ` = os.Getenv("`, *authScheme.Basic.UsernameEnvVar, `")`)
+			f.P("}")
+			f.P("if options.", authScheme.Basic.Password.PascalCase.UnsafeName, ` == "" {`)
+			f.P("options. ", authScheme.Basic.Password.PascalCase.UnsafeName, ` = os.Getenv("`, *authScheme.Basic.PasswordEnvVar, `")`)
+			f.P("}")
+			continue
+		}
+		if header := authScheme.Header; header != nil && header.HeaderEnvVar != nil {
+			f.P("if options.", header.Name.Name.PascalCase.UnsafeName, ` == "" {`)
+			f.P("options. ", header.Name.Name.PascalCase.UnsafeName, ` = os.Getenv("`, *header.HeaderEnvVar, `")`)
+			f.P("}")
+			continue
+		}
+	}
+	for _, header := range headers {
+		if header.Env != nil {
+			f.P("if options.", header.Name.Name.PascalCase.UnsafeName, ` == "" {`)
+			f.P("options. ", header.Name.Name.PascalCase.UnsafeName, ` = os.Getenv("`, *header.Env, `")`)
+			f.P("}")
+			continue
+		}
+	}
 	f.P("return &", clientName, "{")
 	f.P(`baseURL: options.BaseURL,`)
 	f.P("caller: core.NewCaller(")
@@ -879,13 +935,22 @@ func (f *fileWriter) WriteClient(
 		f.P("}")
 		baseURLVariable := "baseURL"
 		if len(endpoint.PathSuffix) > 0 {
-			baseURLVariable = `baseURL + "/" + ` + fmt.Sprintf("%q", endpoint.PathSuffix)
+			baseURLVariable = `baseURL + ` + fmt.Sprintf(`"/%s"`, endpoint.PathSuffix)
 		}
-		urlStatement := fmt.Sprintf("endpointURL := %s", baseURLVariable)
 		if len(endpoint.PathParameterNames) > 0 {
-			urlStatement = "endpointURL := fmt.Sprintf(" + baseURLVariable + ", " + endpoint.PathParameterNames + ")"
+			if len(endpoint.PathParameterNames) == 1 {
+				f.P("endpointURL := core.EncodeURL(", baseURLVariable, ", ", endpoint.PathParameterNames[0], ")")
+			} else {
+				f.P("endpointURL := core.EncodeURL(")
+				f.P(baseURLVariable, ", ")
+				for _, pathParameterName := range endpoint.PathParameterNames {
+					f.P(pathParameterName, ",")
+				}
+				f.P(")")
+			}
+		} else {
+			f.P(fmt.Sprintf("endpointURL := %s", baseURLVariable))
 		}
-		f.P(urlStatement)
 		if len(endpoint.QueryParameters) > 0 {
 			f.P()
 			f.P("queryParams, err := core.QueryValues(", endpoint.RequestParameterName, ")")
@@ -897,9 +962,11 @@ func (f *fileWriter) WriteClient(
 					f.P(`queryParams.Add("`, queryParameter.Name.WireValue, `", fmt.Sprintf("%v", `, literalToValue(queryParameter.ValueType.Container.Literal), "))")
 				}
 			}
-			f.P("if len(queryParams) > 0 {")
-			f.P(`endpointURL += "?" + queryParams.Encode()`)
-			f.P("}")
+			if endpoint.PaginationInfo == nil {
+				f.P("if len(queryParams) > 0 {")
+				f.P(`endpointURL += "?" + queryParams.Encode()`)
+				f.P("}")
+			}
 		}
 
 		headersParameter := "headers"
@@ -908,7 +975,7 @@ func (f *fileWriter) WriteClient(
 		if len(endpoint.Headers) > 0 {
 			// Add endpoint-specific headers from the request, if any.
 			for _, header := range endpoint.Headers {
-				valueTypeFormat := formatForValueType(header.ValueType)
+				valueTypeFormat := formatForValueType(header.ValueType, f.types)
 				requestField := valueTypeFormat.Prefix + endpoint.RequestParameterName + "." + header.Name.Name.PascalCase.UnsafeName + valueTypeFormat.Suffix
 				if valueTypeFormat.IsOptional {
 					f.P("if ", endpoint.RequestParameterName, ".", header.Name.Name.PascalCase.UnsafeName, "!= nil {")
@@ -951,7 +1018,7 @@ func (f *fileWriter) WriteClient(
 				f.P(content.Name.PascalCase.UnsafeName, " json.RawMessage `json:\"", content.WireValue, "\"`")
 				f.P("}")
 				f.P("if err := decoder.Decode(&discriminant); err != nil {")
-				f.P("return err")
+				f.P("return apiError")
 				f.P("}")
 			}
 			f.P("switch ", switchValue, " {")
@@ -997,7 +1064,7 @@ func (f *fileWriter) WriteClient(
 		}
 
 		// Prepare a response variable.
-		if endpoint.ResponseType != "" && !endpoint.IsStreaming {
+		if endpoint.ResponseType != "" && !endpoint.IsStreaming && endpoint.PaginationInfo == nil {
 			f.P(fmt.Sprintf(endpoint.ResponseInitializerFormat, endpoint.ResponseType))
 		}
 
@@ -1005,28 +1072,50 @@ func (f *fileWriter) WriteClient(
 			f.P("requestBuffer := bytes.NewBuffer(nil)")
 			f.P("writer := multipart.NewWriter(requestBuffer)")
 			for _, fileProperty := range endpoint.FileProperties {
-				var (
-					fileVariable     = fileProperty.Key.Name.CamelCase.SafeName
-					filenameVariable = fileProperty.Key.Name.CamelCase.UnsafeName + "Filename"
-					filenameValue    = fileProperty.Key.Name.CamelCase.UnsafeName + "_filename"
-					partVariable     = fileProperty.Key.Name.CamelCase.UnsafeName + "Part"
-				)
-				if fileProperty.IsOptional {
-					f.P("if ", fileVariable, " != nil {")
+				filePropertyInfo, err := filePropertyToInfo(fileProperty)
+				if err != nil {
+					return nil, err
 				}
-				f.P(fmt.Sprintf("%s := %q", filenameVariable, filenameValue))
-				f.P("if named, ok := ", fileVariable, ".(interface{ Name() string }); ok {")
-				f.P(fmt.Sprintf("%s = named.Name()", filenameVariable))
-				f.P("}")
-				f.P(partVariable, `, err := writer.CreateFormFile("`, fileProperty.Key.WireValue, `", `, filenameVariable, ")")
-				f.P("if err != nil {")
-				f.P("return ", endpoint.ErrorReturnValues)
-				f.P("}")
-				f.P("if _, err := io.Copy(", partVariable, ", ", fileVariable, "); err != nil {")
-				f.P("return ", endpoint.ErrorReturnValues)
-				f.P("}")
-				if fileProperty.IsOptional {
+				var (
+					fileVariable     = filePropertyInfo.Key.Name.CamelCase.SafeName
+					filenameVariable = filePropertyInfo.Key.Name.CamelCase.UnsafeName + "Filename"
+					filenameValue    = filePropertyInfo.Key.Name.CamelCase.UnsafeName + "_filename"
+					partVariable     = filePropertyInfo.Key.Name.CamelCase.UnsafeName + "Part"
+				)
+				if filePropertyInfo.IsArray {
+					// We don't care whether the file array is optional or not; the range
+					// handles that for us.
+					f.P("for i, f := range ", fileVariable, "{")
+					f.P(filenameVariable, ` := fmt.Sprintf("`, filenameValue, `_%d", i)`)
+					f.P("if named, ok := f.(interface{ Name() string }); ok {")
+					f.P(fmt.Sprintf("%s = named.Name()", filenameVariable))
 					f.P("}")
+					f.P(partVariable, `, err := writer.CreateFormFile("`, filePropertyInfo.Key.WireValue, `", `, filenameVariable, ")")
+					f.P("if err != nil {")
+					f.P("return ", endpoint.ErrorReturnValues)
+					f.P("}")
+					f.P("if _, err := io.Copy(", partVariable, ", f); err != nil {")
+					f.P("return ", endpoint.ErrorReturnValues)
+					f.P("}")
+					f.P("}")
+				} else {
+					if filePropertyInfo.IsOptional {
+						f.P("if ", fileVariable, " != nil {")
+					}
+					f.P(fmt.Sprintf("%s := %q", filenameVariable, filenameValue))
+					f.P("if named, ok := ", fileVariable, ".(interface{ Name() string }); ok {")
+					f.P(fmt.Sprintf("%s = named.Name()", filenameVariable))
+					f.P("}")
+					f.P(partVariable, `, err := writer.CreateFormFile("`, filePropertyInfo.Key.WireValue, `", `, filenameVariable, ")")
+					f.P("if err != nil {")
+					f.P("return ", endpoint.ErrorReturnValues)
+					f.P("}")
+					f.P("if _, err := io.Copy(", partVariable, ", ", fileVariable, "); err != nil {")
+					f.P("return ", endpoint.ErrorReturnValues)
+					f.P("}")
+					if filePropertyInfo.IsOptional {
+						f.P("}")
+					}
 				}
 			}
 
@@ -1037,7 +1126,7 @@ func (f *fileWriter) WriteClient(
 					f.P("}")
 					continue
 				}
-				valueTypeFormat := formatForValueType(fileBodyProperty.ValueType)
+				valueTypeFormat := formatForValueType(fileBodyProperty.ValueType, f.types)
 				requestField := valueTypeFormat.Prefix + endpoint.RequestParameterName + "." + fileBodyProperty.Name.Name.PascalCase.UnsafeName + valueTypeFormat.Suffix
 
 				// Encapsulate the multipart form WriteField in a closure so that we can easily
@@ -1092,6 +1181,121 @@ func (f *fileWriter) WriteClient(
 			f.P(")")
 			f.P("}")
 			f.P()
+		} else if endpoint.PaginationInfo != nil {
+			f.P("prepareCall := func(pageRequest *core.PageRequest[", endpoint.PaginationInfo.PageGoType, "]) *core.CallParams {")
+			f.P("if pageRequest.Cursor != ", endpoint.PaginationInfo.PageZeroValue, " {")
+			f.P(endpoint.PaginationInfo.SetPageRequestParameter)
+			f.P("}")
+			f.P("nextURL := endpointURL")
+			f.P("if len(queryParams) > 0 {")
+			f.P(`nextURL += "?" + queryParams.Encode()`)
+			f.P("}")
+			f.P("return &core.CallParams{")
+			f.P("URL: nextURL, ")
+			f.P("Method:", endpoint.Method, ",")
+			f.P("MaxAttempts: options.MaxAttempts,")
+			f.P("Headers:", headersParameter, ",")
+			f.P("Client: options.HTTPClient,")
+			if endpoint.RequestValueName != "" {
+				f.P("Request: ", endpoint.RequestValueName, ",")
+			}
+			if endpoint.ResponseParameterName != "" {
+				f.P("Response: ", endpoint.ResponseParameterName, ",")
+			}
+			if endpoint.ResponseIsOptionalParameter {
+				f.P("ResponseIsOptional: true,")
+			}
+			if endpoint.ErrorDecoderParameterName != "" {
+				f.P("ErrorDecoder:", endpoint.ErrorDecoderParameterName, ",")
+			}
+			f.P("}")
+			f.P("}")
+
+			var pagerConstructor string
+			switch endpoint.PaginationInfo.Type {
+			case "cursor":
+				pagerConstructor = "core.NewCursorPager"
+
+				f.P("readPageResponse := func(response ", endpoint.ResponseType, ") *core.PageResponse[", endpoint.PaginationInfo.PageGoType, ",", endpoint.PaginationInfo.ResultsSingleGoType, "] {")
+				if len(endpoint.PaginationInfo.NextCursor.PropertyPath) > 0 {
+					f.P("var next ", endpoint.PaginationInfo.NextCursorGoType)
+					f.P(endpoint.PaginationInfo.NextCursorNilCheck)
+					f.P("next = ", endpoint.PaginationInfo.NextCursorPropertyPath, endpoint.PaginationInfo.NextCursor.Property.Name.Name.PascalCase.UnsafeName)
+					f.P("}")
+				} else {
+					f.P("next := ", endpoint.PaginationInfo.NextCursorPropertyPath, endpoint.PaginationInfo.NextCursor.Property.Name.Name.PascalCase.UnsafeName)
+				}
+				if len(endpoint.PaginationInfo.Results.PropertyPath) > 0 {
+					f.P("var results ", endpoint.PaginationInfo.ResultsGoType)
+					f.P(endpoint.PaginationInfo.ResultsNilCheck)
+					f.P("results = ", endpoint.PaginationInfo.ResultsPropertyPath, endpoint.PaginationInfo.Results.Property.Name.Name.PascalCase.UnsafeName)
+					f.P("}")
+				} else {
+					f.P("results := ", endpoint.PaginationInfo.ResultsPropertyPath, endpoint.PaginationInfo.Results.Property.Name.Name.PascalCase.UnsafeName)
+				}
+
+				if endpoint.PaginationInfo.NextCursorIsOptional && !endpoint.PaginationInfo.PageIsOptional {
+					f.P("if next == nil {")
+					f.P("return &core.PageResponse[", endpoint.PaginationInfo.PageGoType, ",", endpoint.PaginationInfo.ResultsSingleGoType, "]{")
+					f.P("Results: results,")
+					f.P("}")
+					f.P("}")
+				}
+
+				f.P("return &core.PageResponse[", endpoint.PaginationInfo.PageGoType, ",", endpoint.PaginationInfo.ResultsSingleGoType, "]{")
+				if endpoint.PaginationInfo.PageIsOptional != endpoint.PaginationInfo.NextCursorIsOptional {
+					if endpoint.PaginationInfo.NextCursorIsOptional {
+						f.P("Next: *next,")
+					} else {
+						f.P("Next: &next,")
+					}
+				} else {
+					f.P("Next: next,")
+				}
+				f.P("Results: results,")
+				f.P("}")
+				f.P("}")
+			case "offset":
+				pagerConstructor = "core.NewOffsetPager"
+
+				f.P("next := 1")
+				if len(endpoint.PaginationInfo.PageNilCheck) > 0 {
+					f.P(endpoint.PaginationInfo.PageNilCheck)
+					if endpoint.PaginationInfo.PageIsOptional {
+						f.P("next = *", endpoint.RequestParameterName, ".", endpoint.PaginationInfo.Page.Name.Name.PascalCase.UnsafeName)
+					} else {
+						f.P("next = ", endpoint.RequestParameterName, ".", endpoint.PaginationInfo.Page.Name.Name.PascalCase.UnsafeName)
+					}
+					f.P("}")
+				}
+
+				f.P("readPageResponse := func(response ", endpoint.ResponseType, ") *core.PageResponse[", endpoint.PaginationInfo.PageGoType, ",", endpoint.PaginationInfo.ResultsSingleGoType, "] {")
+				f.P("next += 1")
+				if len(endpoint.PaginationInfo.Results.PropertyPath) > 0 {
+					f.P("var results ", endpoint.PaginationInfo.ResultsGoType)
+					f.P(endpoint.PaginationInfo.ResultsNilCheck)
+					f.P("results = ", endpoint.PaginationInfo.ResultsPropertyPath, endpoint.PaginationInfo.Results.Property.Name.Name.PascalCase.UnsafeName)
+					f.P("}")
+				} else {
+					f.P("results := ", endpoint.PaginationInfo.ResultsPropertyPath, endpoint.PaginationInfo.Results.Property.Name.Name.PascalCase.UnsafeName)
+				}
+
+				f.P("return &core.PageResponse[", endpoint.PaginationInfo.PageGoType, ",", endpoint.PaginationInfo.ResultsSingleGoType, "]{")
+				f.P("Next: ", endpoint.PaginationInfo.PageFirstRequestParameter, ",")
+				f.P("Results: results,")
+				f.P("}")
+				f.P("}")
+			}
+
+			f.P("pager := ", pagerConstructor, "(")
+			f.P(receiver, ".caller,")
+			f.P("prepareCall,")
+			f.P("readPageResponse,")
+			f.P(")")
+
+			f.P("return pager.GetPage(ctx, ", endpoint.PaginationInfo.PageFirstRequestParameter, ")")
+			f.P("}")
+			f.P()
 		} else {
 			f.P("if err := ", receiver, ".caller.Call(")
 			f.P("ctx,")
@@ -1122,29 +1326,591 @@ func (f *fileWriter) WriteClient(
 			f.P()
 		}
 	}
+	return NewGeneratedClient(
+		f,
+		fernFilepath,
+		irEndpoints,
+		rootClientInstantiation,
+	)
+}
+
+type paginationInfo struct {
+	Type                      string
+	Page                      *ir.QueryParameter
+	PageNilCheck              string
+	PageGoType                string
+	PageZeroValue             string
+	PageFirstRequestParameter string
+	PageIsOptional            bool
+	SetPageRequestParameter   string
+	Results                   *ir.ResponseProperty
+	ResultsPropertyPath       string
+	ResultsNilCheck           string
+	ResultsGoType             string
+	ResultsSingleGoType       string
+
+	// NextCursor is only relevant for cursor pagination.
+	NextCursor             *ir.ResponseProperty
+	NextCursorPropertyPath string
+	NextCursorNilCheck     string
+	NextCursorGoType       string
+	NextCursorIsOptional   bool
+}
+
+func (f *fileWriter) getPaginationInfo(
+	irEndpoint *ir.HttpEndpoint,
+	scope *gospec.Scope,
+	requestParameterName string,
+) (*paginationInfo, error) {
+	if irEndpoint.Pagination == nil {
+		return nil, nil
+	}
+	pagination := irEndpoint.Pagination
+	switch t := pagination.Type; t {
+	case "cursor":
+		resultsSingleType, err := singleTypeReferenceFromResponseProperty(pagination.Cursor.Results)
+		if err != nil {
+			return nil, err
+		}
+		var (
+			pageIsOptional       = pagination.Cursor.Page.ValueType.Container != nil && pagination.Cursor.Page.ValueType.Container.Optional != nil
+			nextCursorIsOptional = pagination.Cursor.Next.Property.ValueType.Container != nil && pagination.Cursor.Next.Property.ValueType.Container.Optional != nil
+			valueTypeFormat      = formatForValueType(pagination.Cursor.Page.ValueType, f.types)
+			value                = valueTypeFormat.Prefix + "pageRequest.Cursor" + valueTypeFormat.Suffix
+			wireValue            = pagination.Cursor.Page.Name.WireValue
+		)
+		return &paginationInfo{
+			Type:                      t,
+			Page:                      pagination.Cursor.Page,
+			PageNilCheck:              fmt.Sprintf("if %s.%s != %s {", requestParameterName, pagination.Cursor.Page.Name.Name.PascalCase.UnsafeName, valueTypeFormat.ZeroValue),
+			PageGoType:                typeReferenceToGoType(pagination.Cursor.Page.ValueType, f.types, scope, f.baseImportPath, "", false),
+			PageZeroValue:             valueTypeFormat.ZeroValue,
+			PageFirstRequestParameter: fmt.Sprintf("%s.%s", requestParameterName, pagination.Cursor.Page.Name.Name.PascalCase.UnsafeName),
+			PageIsOptional:            pageIsOptional,
+			SetPageRequestParameter:   `queryParams.Set("` + wireValue + `", fmt.Sprintf("%v", ` + value + `))`,
+			Results:                   pagination.Cursor.Results,
+			ResultsPropertyPath:       responsePropertyPathToFullPathString("response", pagination.Cursor.Results.PropertyPath),
+			ResultsNilCheck:           responsePropertyPathToNilCheck("response", pagination.Cursor.Results.PropertyPath),
+			ResultsSingleGoType:       typeReferenceToGoType(resultsSingleType, f.types, scope, f.baseImportPath, "", false),
+			ResultsGoType:             typeReferenceToGoType(pagination.Cursor.Results.Property.ValueType, f.types, scope, f.baseImportPath, "", false),
+			NextCursor:                pagination.Cursor.Next,
+			NextCursorPropertyPath:    responsePropertyPathToFullPathString("response", pagination.Cursor.Next.PropertyPath),
+			NextCursorNilCheck:        responsePropertyPathToNilCheck("response", pagination.Cursor.Next.PropertyPath),
+			NextCursorGoType:          typeReferenceToGoType(pagination.Cursor.Next.Property.ValueType, f.types, scope, f.baseImportPath, "", false),
+			NextCursorIsOptional:      nextCursorIsOptional,
+		}, nil
+	case "offset":
+		resultsSingleType, err := singleTypeReferenceFromResponseProperty(pagination.Offset.Results)
+		if err != nil {
+			return nil, err
+		}
+		var (
+			pageIsOptional  = pagination.Offset.Page.ValueType.Container != nil && pagination.Offset.Page.ValueType.Container.Optional != nil
+			valueTypeFormat = formatForValueType(pagination.Offset.Page.ValueType, f.types)
+			value           = valueTypeFormat.Prefix + "pageRequest.Cursor" + valueTypeFormat.Suffix
+			wireValue       = pagination.Offset.Page.Name.WireValue
+		)
+		pageFirstRequestParameter := "next"
+		if pageIsOptional {
+			pageFirstRequestParameter = "&next"
+		}
+		return &paginationInfo{
+			Type:                      t,
+			Page:                      pagination.Offset.Page,
+			PageNilCheck:              fmt.Sprintf("if %s.%s != %s {", requestParameterName, pagination.Offset.Page.Name.Name.PascalCase.UnsafeName, valueTypeFormat.ZeroValue),
+			PageGoType:                typeReferenceToGoType(pagination.Offset.Page.ValueType, f.types, scope, f.baseImportPath, "", false),
+			PageZeroValue:             valueTypeFormat.ZeroValue,
+			PageFirstRequestParameter: pageFirstRequestParameter,
+			PageIsOptional:            pageIsOptional,
+			SetPageRequestParameter:   `queryParams.Set("` + wireValue + `", fmt.Sprintf("%v", ` + value + `))`,
+			Results:                   pagination.Offset.Results,
+			ResultsPropertyPath:       responsePropertyPathToFullPathString("response", pagination.Offset.Results.PropertyPath),
+			ResultsNilCheck:           responsePropertyPathToNilCheck("response", pagination.Offset.Results.PropertyPath),
+			ResultsGoType:             typeReferenceToGoType(pagination.Offset.Results.Property.ValueType, f.types, scope, f.baseImportPath, "", false),
+			ResultsSingleGoType:       typeReferenceToGoType(resultsSingleType, f.types, scope, f.baseImportPath, "", false),
+		}, nil
+	default:
+		return nil, fmt.Errorf("%s pagination is not supported yet", t)
+	}
+}
+
+func singleTypeReferenceFromResponseProperty(responseProperty *ir.ResponseProperty) (*ir.TypeReference, error) {
+	if responseProperty == nil {
+		return nil, nil
+	}
+	property := responseProperty.Property
+	if property != nil && property.ValueType != nil {
+		valueType := property.ValueType
+		if property.ValueType.Container != nil && property.ValueType.Container.Optional != nil {
+			valueType = property.ValueType.Container.Optional
+		}
+		switch valueType.Type {
+		case "container":
+			switch valueType.Container.Type {
+			case "list":
+				return valueType.Container.List, nil
+			case "set":
+				return valueType.Container.Set, nil
+			}
+		}
+		return nil, fmt.Errorf("unsupported pagination results type %q", valueType.Type)
+	}
+	return nil, nil
+}
+
+// responsePropertyPathToString returns if condition that ensures we don't accidentally
+// cause a nil-dereference when accessing a response property path.
+//
+// Note that when we support method getters, we can simplify this.
+func responsePropertyPathToNilCheck(variable string, propertyPath []*ir.Name) string {
+	if len(propertyPath) == 0 {
+		return ""
+	}
+	result := "if "
+	var parts []string
+	for i, part := range propertyPath {
+		parts = append(parts, part.PascalCase.UnsafeName)
+		result += fmt.Sprintf("%s.%s != nil", variable, strings.Join(parts, "."))
+		if i < len(propertyPath)-1 {
+			result += " && "
+		}
+	}
+	result += " {"
+	return result
+}
+
+// responsePropertyPathToFullPathString returns the string used to access the response property.
+//
+// Note that when we support method getters, we can simplify this.
+func responsePropertyPathToFullPathString(variable string, propertyPath []*ir.Name) string {
+	if len(propertyPath) == 0 {
+		return variable + "."
+	}
+	var parts []string
+	for _, part := range propertyPath {
+		parts = append(parts, part.PascalCase.UnsafeName)
+	}
+	return variable + "." + strings.Join(parts, ".") + "."
+}
+
+// NewGeneratedClient constructs the snippets associated with the client's
+// endpoints.
+func NewGeneratedClient(
+	f *fileWriter,
+	fernFilepath *ir.FernFilepath,
+	endpoints []*ir.HttpEndpoint,
+	rootClientInstantiation *ast.AssignStmt,
+) (*GeneratedClient, error) {
+	var generatedEndpoints []*GeneratedEndpoint
+	for _, endpoint := range endpoints {
+		if len(endpoint.Examples) == 0 {
+			continue
+		}
+		example := exampleEndpointCallFromEndpointExample(endpoint.Examples[0])
+		if example == nil {
+			continue
+		}
+		generatedEndpoints = append(
+			generatedEndpoints,
+			newGeneratedEndpoint(
+				f,
+				fernFilepath,
+				rootClientInstantiation,
+				endpoint,
+				example,
+			),
+		)
+	}
+	return &GeneratedClient{
+		Instantiation: rootClientInstantiation,
+		Endpoints:     generatedEndpoints,
+	}, nil
+}
+
+type exampleEndpointCallVisitor struct {
+	value *ir.ExampleEndpointCall
+}
+
+func (e *exampleEndpointCallVisitor) VisitUserProvided(value *ir.ExampleEndpointCall) error {
+	e.value = value
+	return nil
+}
+
+func (e *exampleEndpointCallVisitor) VisitGenerated(value *ir.ExampleEndpointCall) error {
+	e.value = value
+	return nil
+}
+
+func exampleEndpointCallFromEndpointExample(example *ir.HttpEndpointExample) *ir.ExampleEndpointCall {
+	visitor := new(exampleEndpointCallVisitor)
+	example.Accept(visitor)
+	return visitor.value
+}
+
+func newGeneratedEndpoint(
+	f *fileWriter,
+	fernFilepath *ir.FernFilepath,
+	rootClientInstantiation *ast.AssignStmt,
+	endpoint *ir.HttpEndpoint,
+	example *ir.ExampleEndpointCall,
+) *GeneratedEndpoint {
+	return &GeneratedEndpoint{
+		Identifier: endpointToIdentifier(endpoint),
+		Snippet: newEndpointSnippet(
+			f,
+			fernFilepath,
+			rootClientInstantiation,
+			endpoint,
+			example,
+		),
+	}
+}
+
+func endpointToIdentifier(endpoint *ir.HttpEndpoint) *generatorexec.EndpointIdentifier {
+	return &generatorexec.EndpointIdentifier{
+		Path:               fullPathForEndpoint(endpoint),
+		Method:             irMethodToGeneratorExecMethod(endpoint.Method),
+		IdentifierOverride: &endpoint.Id,
+	}
+}
+
+func fullPathForEndpoint(endpoint *ir.HttpEndpoint) string {
+	var components []string
+	if head := strings.Trim(endpoint.FullPath.Head, "/"); len(head) > 0 {
+		components = append(components, head)
+	}
+	for _, part := range endpoint.FullPath.Parts {
+		components = append(components, fmt.Sprintf("{%s}", part.PathParameter))
+		if tail := strings.Trim(part.Tail, "/"); len(tail) > 0 {
+			components = append(components, tail)
+		}
+	}
+	return fmt.Sprintf("/%s", strings.Join(components, "/"))
+}
+
+func irMethodToGeneratorExecMethod(method ir.HttpMethod) generatorexec.EndpointMethod {
+	switch method {
+	case ir.HttpMethodGet:
+		return generatorexec.EndpointMethodGet
+	case ir.HttpMethodPost:
+		return generatorexec.EndpointMethodPost
+	case ir.HttpMethodPut:
+		return generatorexec.EndpointMethodPut
+	case ir.HttpMethodPatch:
+		return generatorexec.EndpointMethodPatch
+	case ir.HttpMethodDelete:
+		return generatorexec.EndpointMethodDelete
+	}
+	return 0
+}
+
+func newEndpointSnippet(
+	f *fileWriter,
+	fernFilepath *ir.FernFilepath,
+	rootClientInstantiation *ast.AssignStmt,
+	endpoint *ir.HttpEndpoint,
+	example *ir.ExampleEndpointCall,
+) *ast.Block {
+	methodName := getEndpointMethodName(fernFilepath, endpoint)
+	parameters := getEndpointParameters(
+		f,
+		fernFilepath,
+		endpoint,
+		example,
+	)
+	call := &ast.CallExpr{
+		FunctionName: &ast.LocalReference{
+			Name: fmt.Sprintf("client.%s", methodName),
+		},
+		Parameters: parameters,
+	}
+	returnValues := []ast.Expr{
+		&ast.LocalReference{
+			Name: "err",
+		},
+	}
+	if endpoint.Response != nil {
+		returnValues = append(
+			[]ast.Expr{
+				&ast.LocalReference{
+					Name: "response",
+				},
+			},
+			returnValues...,
+		)
+	}
+	endpointCall := &ast.AssignStmt{
+		Left: returnValues,
+		Right: []ast.Expr{
+			call,
+		},
+	}
+	return &ast.Block{
+		Exprs: []ast.Expr{
+			rootClientInstantiation,
+			endpointCall,
+		},
+	}
+}
+
+func getEndpointMethodName(
+	fernFilepath *ir.FernFilepath,
+	endpoint *ir.HttpEndpoint,
+) string {
+	var packageElements []string
+	for _, packageElem := range fernFilepath.PackagePath {
+		packageElements = append(packageElements, packageElem.PascalCase.UnsafeName)
+	}
+	if fernFilepath.File != nil {
+		packageElements = append(packageElements, fernFilepath.File.PascalCase.UnsafeName)
+	}
+	methodName := endpoint.Name.PascalCase.UnsafeName
+	if len(packageElements) == 0 {
+		return methodName
+	}
+	return fmt.Sprintf("%s.%s", strings.Join(packageElements, "."), methodName)
+}
+
+func getEndpointParameters(
+	f *fileWriter,
+	fernFilepath *ir.FernFilepath,
+	endpoint *ir.HttpEndpoint,
+	example *ir.ExampleEndpointCall,
+) []ast.Expr {
+	parameters := []ast.Expr{
+		&ast.CallExpr{
+			FunctionName: &ast.ImportedReference{
+				Name:       "TODO",
+				ImportPath: "context",
+			},
+		},
+	}
+
+	allPathParameters := example.RootPathParameters
+	allPathParameters = append(allPathParameters, example.ServicePathParameters...)
+	allPathParameters = append(allPathParameters, example.EndpointPathParameters...)
+	for _, pathParameter := range allPathParameters {
+		parameters = append(
+			parameters,
+			f.snippetWriter.GetSnippetForExampleTypeReference(pathParameter.Value),
+		)
+	}
+
+	var fields []*ast.Field
+	for _, header := range append(example.ServiceHeaders, example.EndpointHeaders...) {
+		if isHeaderLiteral(endpoint, header.Name.WireValue) {
+			continue
+		}
+		fields = append(
+			fields,
+			&ast.Field{
+				Key:   header.Name.Name.PascalCase.UnsafeName,
+				Value: f.snippetWriter.GetSnippetForExampleTypeReference(header.Value),
+			},
+		)
+	}
+
+	for _, queryParameter := range example.QueryParameters {
+		if isQueryParameterLiteral(endpoint, queryParameter.Name.WireValue) {
+			continue
+		}
+		exampleValue := f.snippetWriter.GetSnippetForExampleTypeReference(queryParameter.Value)
+		if isQueryParameterAllowMultiple(endpoint, queryParameter.Name.WireValue) {
+			// This query parameter allows multiple elements, so we need to surround the example
+			// value in an array.
+			expr := exampleTypeReferenceShapeToGoType(
+				queryParameter.Value.Shape,
+				f.types,
+				f.baseImportPath,
+			)
+			exampleValue = &ast.ArrayLit{
+				Type: &ast.ArrayType{
+					Expr: expr,
+				},
+				Values: []ast.Expr{
+					exampleValue,
+				},
+			}
+		}
+		fields = append(
+			fields,
+			&ast.Field{
+				Key:   queryParameter.Name.Name.PascalCase.UnsafeName,
+				Value: exampleValue,
+			},
+		)
+	}
+
+	if !shouldSkipRequestType(endpoint) {
+		fields = append(
+			fields,
+			exampleRequestBodyToFields(f, endpoint, example.Request)...,
+		)
+		parameters = append(
+			parameters,
+			&ast.StructType{
+				Name: &ast.ImportedReference{
+					Name:       endpoint.SdkRequest.Shape.Wrapper.WrapperName.PascalCase.UnsafeName,
+					ImportPath: fernFilepathToImportPath(f.baseImportPath, fernFilepath),
+				},
+				Fields: fields,
+			},
+		)
+		return parameters
+	}
+
+	if example.Request != nil && example.Request.Reference != nil {
+		// Include the body as an ordinary parameter alongside the rest.
+		parameters = append(
+			parameters,
+			f.snippetWriter.GetSnippetForExampleTypeReference(example.Request.Reference),
+		)
+	}
+	return parameters
+}
+
+func exampleRequestBodyToFields(
+	f *fileWriter,
+	endpoint *ir.HttpEndpoint,
+	exampleRequestBody *ir.ExampleRequestBody,
+) []*ast.Field {
+	if exampleRequestBody == nil {
+		return nil
+	}
+	var fields []*ast.Field
+	switch exampleRequestBody.Type {
+	case "inlinedRequestBody":
+		for _, property := range exampleRequestBody.InlinedRequestBody.Properties {
+			if isExampleInlinedRequestBodyPropertyLiteral(endpoint, property) {
+				return fields
+			}
+			fields = append(
+				fields,
+				&ast.Field{
+					Key:   property.Name.Name.PascalCase.UnsafeName,
+					Value: f.snippetWriter.GetSnippetForExampleTypeReference(property.Value),
+				},
+			)
+		}
+		return fields
+	case "reference":
+		if isExampleReferenceRequestBodyLiteral(endpoint) {
+			return fields
+		}
+		fields = append(
+			fields,
+			&ast.Field{
+				Key:   endpoint.SdkRequest.Shape.Wrapper.BodyKey.PascalCase.UnsafeName,
+				Value: f.snippetWriter.GetSnippetForExampleTypeReference(exampleRequestBody.Reference),
+			},
+		)
+	}
+	return fields
+}
+
+func isHeaderLiteral(endpoint *ir.HttpEndpoint, wireValue string) bool {
+	for _, header := range endpoint.Headers {
+		if header.Name.WireValue == wireValue {
+			return isTypeReferenceLiteral(header.ValueType)
+		}
+	}
+	return false
+}
+
+func isQueryParameterLiteral(endpoint *ir.HttpEndpoint, wireValue string) bool {
+	for _, queryParameter := range endpoint.QueryParameters {
+		if queryParameter.Name.WireValue == wireValue {
+			return isTypeReferenceLiteral(queryParameter.ValueType)
+		}
+	}
+	return false
+}
+
+func isQueryParameterAllowMultiple(endpoint *ir.HttpEndpoint, wireValue string) bool {
+	for _, queryParameter := range endpoint.QueryParameters {
+		if queryParameter.Name.WireValue == wireValue {
+			return queryParameter.AllowMultiple
+		}
+	}
+	return false
+}
+
+func isExampleInlinedRequestBodyPropertyLiteral(
+	endpoint *ir.HttpEndpoint,
+	exampleInlinedRequestBodyProperty *ir.ExampleInlinedRequestBodyProperty,
+) bool {
+	if endpoint.RequestBody == nil || endpoint.RequestBody.InlinedRequestBody == nil {
+		return false
+	}
+	wireValue := exampleInlinedRequestBodyProperty.Name.WireValue
+	for _, property := range endpoint.RequestBody.InlinedRequestBody.Properties {
+		if property.Name.WireValue == wireValue {
+			return isTypeReferenceLiteral(property.ValueType)
+		}
+	}
+	return false
+}
+
+func isExampleReferenceRequestBodyLiteral(
+	endpoint *ir.HttpEndpoint,
+) bool {
+	if endpoint.RequestBody == nil || endpoint.RequestBody.Reference == nil {
+		return false
+	}
+	return isTypeReferenceLiteral(endpoint.RequestBody.Reference.RequestBodyType)
+}
+
+// generatedClientInstantiation returns the AST expression associated with
+// the client construction (including import statements and client options).
+func generatedClientInstantiation(
+	baseImportPath string,
+	generatedAuth *GeneratedAuth,
+	generatedEnvironment *GeneratedEnvironment,
+) *ast.AssignStmt {
 	var parameters []ast.Expr
 	if generatedAuth != nil {
 		parameters = append(parameters, generatedAuth.Option)
 	}
 	if generatedEnvironment != nil {
-		parameters = append(parameters, generatedEnvironment.Example)
+		parameters = append(parameters, generatedEnvironment.Option)
 	}
-	return &GeneratedClient{
-		Instantiation: &ast.AssignStmt{
-			Left: []ast.Expr{
-				ast.NewLocalObject("client"),
-			},
-			Right: []ast.Expr{
-				ast.NewCallExpr(
-					ast.NewImportedObject(
-						"NewClient",
-						packagePathToImportPath(f.baseImportPath, packagePathForClient(fernFilepath)),
-					),
-					parameters,
-				),
-			},
+	return &ast.AssignStmt{
+		Left: []ast.Expr{
+			ast.NewLocalReference("client"),
 		},
-	}, nil
+		Right: []ast.Expr{
+			ast.NewCallExpr(
+				ast.NewImportedReference(
+					"NewClient",
+					packagePathToImportPath(baseImportPath, packagePathForClient(new(ir.FernFilepath))),
+				),
+				parameters,
+			),
+		},
+	}
+}
+
+type filePropertyInfo struct {
+	Key        *ir.NameAndWireValue
+	IsOptional bool
+	IsArray    bool
+}
+
+func filePropertyToInfo(fileProperty *ir.FileProperty) (*filePropertyInfo, error) {
+	switch fileProperty.Type {
+	case "file":
+		return &filePropertyInfo{
+			Key:        fileProperty.File.Key,
+			IsOptional: fileProperty.File.IsOptional,
+		}, nil
+	case "fileArray":
+		return &filePropertyInfo{
+			Key:        fileProperty.FileArray.Key,
+			IsOptional: fileProperty.FileArray.IsOptional,
+			IsArray:    true,
+		}, nil
+	}
+	return nil, fmt.Errorf("file property %s is not yet supported", fileProperty.Type)
 }
 
 // endpoint holds the fields required to generate a client endpoint.
@@ -1165,7 +1931,7 @@ type endpoint struct {
 	ResponseParameterName       string
 	ResponseInitializerFormat   string
 	ResponseIsOptionalParameter bool
-	PathParameterNames          string
+	PathParameterNames          []string
 	SignatureParameters         []*signatureParameter
 	ReturnValues                string
 	SuccessfulReturnValues      string
@@ -1183,8 +1949,10 @@ type endpoint struct {
 	QueryParameters             []*ir.QueryParameter
 	Headers                     []*ir.HttpHeader
 	IdempotencyHeaders          []*ir.HttpHeader
+	FilePropertyInfo            *filePropertyInfo
 	FileProperties              []*ir.FileProperty
 	FileBodyProperties          []*ir.InlinedRequestBodyProperty
+	PaginationInfo              *paginationInfo
 }
 
 type signatureParameter struct {
@@ -1206,10 +1974,33 @@ func (f *fileWriter) endpointFromIR(
 	scope := f.scope.Child()
 
 	// Add path parameters and request body, if any.
-	signatureParameters := []*signatureParameter{{parameter: "ctx context.Context"}}
-	var pathParameterNames []string
+	pathParameterToScopedName := make(map[string]string, len(irEndpoint.AllPathParameters))
+	pathParamters := make(map[string]*ir.PathParameter, len(irEndpoint.AllPathParameters))
 	for _, pathParameter := range irEndpoint.AllPathParameters {
+		pathParamters[pathParameter.Name.OriginalName] = pathParameter
+	}
+
+	var pathParameterNames []string
+	for _, part := range irEndpoint.FullPath.Parts {
+		if part.PathParameter == "" {
+			continue
+		}
+		pathParameter, ok := pathParamters[part.PathParameter]
+		if !ok {
+			return nil, fmt.Errorf("internal error: path parameter %s not found in endpoint %s", part.PathParameter, irEndpoint.Name.OriginalName)
+		}
 		pathParameterName := scope.Add(pathParameter.Name.CamelCase.SafeName)
+		pathParameterNames = append(pathParameterNames, pathParameterName)
+		pathParameterToScopedName[part.PathParameter] = pathParameterName
+	}
+
+	// Preserve the order of path parameters specified in the API in the function signature.
+	signatureParameters := []*signatureParameter{{parameter: "ctx context.Context"}}
+	for _, pathParameter := range irEndpoint.AllPathParameters {
+		pathParameterName, ok := pathParameterToScopedName[pathParameter.Name.OriginalName]
+		if !ok {
+			return nil, fmt.Errorf("internal error: path parameter %s not found in endpoint %s", pathParameter.Name.OriginalName, irEndpoint.Name.OriginalName)
+		}
 		parameterType := typeReferenceToGoType(pathParameter.ValueType, f.types, scope, f.baseImportPath, "" /* The type is always imported */, false)
 		signatureParameters = append(
 			signatureParameters,
@@ -1218,19 +2009,26 @@ func (f *fileWriter) endpointFromIR(
 				parameter: fmt.Sprintf("%s %s", pathParameterName, parameterType),
 			},
 		)
-		pathParameterNames = append(pathParameterNames, pathParameterName)
 	}
 
 	// Add the file parameter(s) after the path parameters, if any.
 	var (
 		fileProperties     []*ir.FileProperty
 		fileBodyProperties []*ir.InlinedRequestBodyProperty
+		filePropertyInfo   *filePropertyInfo
 	)
 	if irEndpoint.RequestBody != nil && irEndpoint.RequestBody.FileUpload != nil {
 		for _, fileUploadProperty := range irEndpoint.RequestBody.FileUpload.Properties {
 			if fileUploadProperty.File != nil {
-				parameterName := fileUploadProperty.File.Key.Name.CamelCase.SafeName
+				filePropertyInfo, err := filePropertyToInfo(fileUploadProperty.File)
+				if err != nil {
+					return nil, err
+				}
+				parameterName := filePropertyInfo.Key.Name.CamelCase.SafeName
 				parameterType := "io.Reader"
+				if filePropertyInfo.IsArray {
+					parameterType = "[]io.Reader"
+				}
 				signatureParameters = append(
 					signatureParameters,
 					&signatureParameter{
@@ -1324,6 +2122,11 @@ func (f *fileWriter) endpointFromIR(
 		},
 	)
 
+	paginationInfo, err := f.getPaginationInfo(irEndpoint, scope, requestParameterName)
+	if err != nil {
+		return nil, err
+	}
+
 	// Format all of the response values.
 	var (
 		responseType              string
@@ -1359,6 +2162,13 @@ func (f *fileWriter) endpointFromIR(
 				successfulReturnValues = fmt.Sprintf("response.%s, nil", responseProperty.Name.Name.PascalCase.UnsafeName)
 				errorReturnValues = fmt.Sprintf("%s, err", defaultValueForTypeReference(responsePropertyTypeReference, f.types))
 			}
+
+			if paginationInfo != nil {
+				responseInitializerFormat = ""
+				responseParameterName = "pageRequest.Response"
+				signatureReturnValues = fmt.Sprintf("(*core.Page[%s], error)", paginationInfo.ResultsSingleGoType)
+				errorReturnValues = "nil, err"
+			}
 		case "fileDownload":
 			responseType = "bytes.NewBuffer(nil)"
 			responseInitializerFormat = "response := %s"
@@ -1374,12 +2184,15 @@ func (f *fileWriter) endpointFromIR(
 			successfulReturnValues = "response.String(), nil"
 			errorReturnValues = `"", err`
 		case "streaming":
-			if terminator := irEndpoint.Response.Streaming.Terminator; terminator != nil {
-				streamDelimiter = *terminator
+			if irEndpoint.Response.Streaming.Json == nil && irEndpoint.Response.Streaming.Text == nil {
+				return nil, fmt.Errorf("unsupported streaming response type: %s", irEndpoint.Response.Streaming.Type)
 			}
-			typeReference := typeReferenceFromStreamingResponseChunkType(irEndpoint.Response.Streaming.DataEventType)
-			if typeReference == nil {
-				return nil, fmt.Errorf("unsupported streaming response type: %s", irEndpoint.Response.Streaming.DataEventType.Type)
+			if irEndpoint.Response.Streaming.Json != nil && irEndpoint.Response.Streaming.Json.Terminator != nil {
+				streamDelimiter = *irEndpoint.Response.Streaming.Json.Terminator
+			}
+			typeReference, err := typeReferenceFromStreamingResponse(irEndpoint.Response.Streaming)
+			if err != nil {
+				return nil, err
 			}
 			responseType = strings.TrimPrefix(typeReferenceToGoType(typeReference, f.types, scope, f.baseImportPath, "" /* The type is always imported */, false), "*")
 			responseParameterName = "response"
@@ -1459,7 +2272,7 @@ func (f *fileWriter) endpointFromIR(
 		ResponseParameterName:       responseParameterName,
 		ResponseInitializerFormat:   responseInitializerFormat,
 		ResponseIsOptionalParameter: responseIsOptionalParameter,
-		PathParameterNames:          strings.Join(pathParameterNames, ", "),
+		PathParameterNames:          pathParameterNames,
 		SignatureParameters:         signatureParameters,
 		ReturnValues:                signatureReturnValues,
 		SuccessfulReturnValues:      successfulReturnValues,
@@ -1477,14 +2290,17 @@ func (f *fileWriter) endpointFromIR(
 		QueryParameters:             irEndpoint.QueryParameters,
 		Headers:                     irEndpoint.Headers,
 		IdempotencyHeaders:          idempotencyHeaders,
+		FilePropertyInfo:            filePropertyInfo,
 		FileProperties:              fileProperties,
 		FileBodyProperties:          fileBodyProperties,
+		PaginationInfo:              paginationInfo,
 	}, nil
 }
 
 // GeneratedEnvironment contains information about the environments that were generated.
 type GeneratedEnvironment struct {
 	Example ast.Expr // e.g. acme.Environments.Production
+	Option  ast.Expr // e.g. option.WithBaseURL(acme.Environments.Production)
 }
 
 // WriteEnvironments writes the environment constants.
@@ -1653,6 +2469,10 @@ func (f *fileWriter) WriteRequestType(
 	for _, literal := range literals {
 		f.P(literal.Name.Name.CamelCase.SafeName, " ", literalToGoType(literal.Value))
 	}
+	if requestBody.extraProperties {
+		f.P()
+		f.P("ExtraProperties map[string]interface{} `json:\"-\" url:\"-\"`")
+	}
 	f.P("}")
 	f.P()
 	// Implement the getter methods.
@@ -1679,7 +2499,7 @@ func (f *fileWriter) WriteRequestType(
 		}
 	}
 
-	if len(literals) == 0 && len(requestBody.dates) == 0 && len(referenceType) == 0 {
+	if len(literals) == 0 && len(requestBody.dates) == 0 && len(referenceType) == 0 && !requestBody.extraProperties {
 		// If the request doesn't specify any literals or a reference type,
 		// we don't need to customize the [de]serialization logic at all.
 		return nil
@@ -1713,6 +2533,10 @@ func (f *fileWriter) WriteRequestType(
 	for _, literal := range literals {
 		f.P(receiver, ".", literal.Name.Name.CamelCase.SafeName, " = ", literalToValue(literal.Value))
 	}
+	if requestBody.extraProperties {
+		f.P()
+		writeExtractExtraProperties(f, literals, receiver, getExtraPropertiesFieldName(requestBody.extraProperties))
+	}
 	f.P("return nil")
 	f.P("}")
 	f.P()
@@ -1745,7 +2569,11 @@ func (f *fileWriter) WriteRequestType(
 			f.P(literal.Name.Name.PascalCase.UnsafeName, ": ", literalToValue(literal.Value), ",")
 		}
 		f.P("}")
-		f.P("return json.Marshal(marshaler)")
+		if requestBody.extraProperties {
+			f.P("return core.MarshalJSONWithExtraProperties(marshaler, ", receiver, ".ExtraProperties)")
+		} else {
+			f.P("return json.Marshal(marshaler)")
+		}
 	}
 	f.P("}")
 	f.P()
@@ -1789,6 +2617,15 @@ func environmentsToEnvironmentsVariable(
 	}
 	return &GeneratedEnvironment{
 		Example: declarationVisitor.value,
+		Option: &ast.CallExpr{
+			FunctionName: &ast.ImportedReference{
+				Name:       "WithBaseURL",
+				ImportPath: path.Join(writer.baseImportPath, "option"),
+			},
+			Parameters: []ast.Expr{
+				declarationVisitor.value,
+			},
+		},
 	}, nil
 }
 
@@ -1824,7 +2661,7 @@ type environmentsDeclarationVisitor struct {
 func (e *environmentsDeclarationVisitor) VisitSingleBaseUrl(url *ir.SingleBaseUrlEnvironments) error {
 	for i, environment := range url.Environments {
 		if i == 0 {
-			e.value = ast.NewImportedObject(
+			e.value = ast.NewImportedReference(
 				fmt.Sprintf("Environments.%s", environment.Name.PascalCase.UnsafeName),
 				e.importPath,
 			)
@@ -1842,7 +2679,7 @@ func (e *environmentsDeclarationVisitor) VisitMultipleBaseUrls(url *ir.MultipleB
 	}
 	for i, environment := range url.Environments {
 		if i == 0 {
-			e.value = ast.NewImportedObject(
+			e.value = ast.NewImportedReference(
 				fmt.Sprintf("Environments.%s", environment.Name.PascalCase.UnsafeName),
 				e.importPath,
 			)
@@ -1930,8 +2767,9 @@ func (e *environmentsURLVisitor) VisitMultipleBaseUrls(url *ir.MultipleBaseUrlsE
 }
 
 type requestBody struct {
-	dates    []*date
-	literals []*literal
+	dates           []*date
+	literals        []*literal
+	extraProperties bool
 }
 
 func requestBodyToFieldDeclaration(
@@ -1954,14 +2792,16 @@ func requestBodyToFieldDeclaration(
 		return nil, err
 	}
 	return &requestBody{
-		dates:    visitor.dates,
-		literals: visitor.literals,
+		dates:           visitor.dates,
+		literals:        visitor.literals,
+		extraProperties: visitor.extraProperties,
 	}, nil
 }
 
 type requestBodyVisitor struct {
-	dates    []*date
-	literals []*literal
+	dates           []*date
+	literals        []*literal
+	extraProperties bool
 
 	bodyField      string
 	baseImportPath string
@@ -1982,9 +2822,15 @@ func (r *requestBodyVisitor) VisitInlinedRequestBody(inlinedRequestBody *ir.Inli
 		writer:         r.writer,
 	}
 	objectTypeDeclaration := inlinedRequestBodyToObjectTypeDeclaration(inlinedRequestBody)
-	objectProperties := typeVisitor.visitObjectProperties(objectTypeDeclaration, true /* includeTags */, r.includeGenericOptionals)
+	objectProperties := typeVisitor.visitObjectProperties(
+		objectTypeDeclaration,
+		true,  // includeJSONTags
+		false, // includeURLTags
+		r.includeGenericOptionals,
+	)
 	r.dates = objectProperties.dates
 	r.literals = objectProperties.literals
+	r.extraProperties = objectTypeDeclaration.ExtraProperties
 	return nil
 }
 
@@ -2019,7 +2865,12 @@ func (r *requestBodyVisitor) VisitFileUpload(fileUpload *ir.FileUploadRequest) e
 		writer:         r.writer,
 	}
 	objectTypeDeclaration := inlinedRequestBodyPropertiesToObjectTypeDeclaration(bodyProperties)
-	objectProperties := typeVisitor.visitObjectProperties(objectTypeDeclaration, true /* includeTags */, r.includeGenericOptionals)
+	objectProperties := typeVisitor.visitObjectProperties(
+		objectTypeDeclaration,
+		true,  // includeJSONTags
+		false, // includeURLTags
+		r.includeGenericOptionals,
+	)
 	r.dates = objectProperties.dates
 	r.literals = objectProperties.literals
 	return nil
@@ -2048,8 +2899,9 @@ func inlinedRequestBodyToObjectTypeDeclaration(inlinedRequestBody *ir.InlinedReq
 		}
 	}
 	return &ir.ObjectTypeDeclaration{
-		Extends:    inlinedRequestBody.Extends,
-		Properties: properties,
+		Extends:         inlinedRequestBody.Extends,
+		Properties:      properties,
+		ExtraProperties: inlinedRequestBody.ExtraProperties,
 	}
 }
 
@@ -2097,7 +2949,7 @@ type valueTypeFormat struct {
 	IsPrimitive bool
 }
 
-func formatForValueType(typeReference *ir.TypeReference) *valueTypeFormat {
+func formatForValueType(typeReference *ir.TypeReference, types map[ir.TypeId]*ir.TypeDeclaration) *valueTypeFormat {
 	var (
 		prefix      string
 		suffix      string
@@ -2131,7 +2983,7 @@ func formatForValueType(typeReference *ir.TypeReference) *valueTypeFormat {
 	return &valueTypeFormat{
 		Prefix:      prefix,
 		Suffix:      suffix,
-		ZeroValue:   zeroValueForTypeReference(typeReference),
+		ZeroValue:   zeroValueForTypeReference(typeReference, types),
 		IsOptional:  isOptional,
 		IsPrimitive: isPrimitive,
 	}
@@ -2152,19 +3004,19 @@ func typeReferenceFromJsonResponse(
 	return nil
 }
 
-func typeReferenceFromStreamingResponseChunkType(
-	chunkType *ir.StreamingResponseChunkType,
-) *ir.TypeReference {
-	if chunkType == nil {
-		return nil
+func typeReferenceFromStreamingResponse(
+	streamingResponse *ir.StreamingResponse,
+) (*ir.TypeReference, error) {
+	if streamingResponse == nil {
+		return nil, nil
 	}
-	switch chunkType.Type {
+	switch streamingResponse.Type {
 	case "json":
-		return chunkType.Json
+		return streamingResponse.Json.Payload, nil
 	case "text":
-		return ir.NewTypeReferenceFromPrimitive(ir.PrimitiveTypeString)
+		return ir.NewTypeReferenceFromPrimitive(ir.PrimitiveTypeString), nil
 	}
-	return nil
+	return nil, fmt.Errorf("unsupported streaming response type: %s", streamingResponse.Type)
 }
 
 // needsRequestParameter returns true if the endpoint needs a request parameter in its
@@ -2174,6 +3026,9 @@ func needsRequestParameter(endpoint *ir.HttpEndpoint) bool {
 		return false
 	}
 	if len(endpoint.QueryParameters) > 0 {
+		return true
+	}
+	if len(endpoint.Headers) > 0 {
 		return true
 	}
 	if endpoint.RequestBody != nil {
@@ -2193,6 +3048,27 @@ func maybePrimitive(typeReference *ir.TypeReference) ir.PrimitiveType {
 		return maybePrimitive(typeReference.Container.Optional)
 	}
 	return ""
+}
+
+// isLiteralType returns true if the given type reference is a literal.
+func isLiteralType(typeReference *ir.TypeReference, types map[ir.TypeId]*ir.TypeDeclaration) bool {
+	if typeReference.Named != nil {
+		typeDeclaration := types[typeReference.Named.TypeId]
+		return typeDeclaration.Shape.Alias != nil && isLiteralType(typeDeclaration.Shape.Alias.AliasOf, types)
+	}
+	if typeReference.Container != nil && typeReference.Container.Optional != nil {
+		return isLiteralType(typeReference.Container.Optional, types)
+	}
+	return typeReference.Container != nil && typeReference.Container.Literal != nil
+}
+
+// isOptionalType returns true if the given type reference is an optional.
+func isOptionalType(typeReference *ir.TypeReference, types map[ir.TypeId]*ir.TypeDeclaration) bool {
+	if typeReference.Named != nil {
+		typeDeclaration := types[typeReference.Named.TypeId]
+		return typeDeclaration.Shape.Alias != nil && isOptionalType(typeDeclaration.Shape.Alias.AliasOf, types)
+	}
+	return typeReference.Container != nil && typeReference.Container.Optional != nil
 }
 
 // needsOptionalDereference returns true if the optional type needs to be referenced.

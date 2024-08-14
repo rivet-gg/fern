@@ -1,10 +1,11 @@
 {
   "extends": "../../../../shared/tsconfig.shared.json",
   "compilerOptions": { "composite": true, "outDir": "lib", "rootDir": "src" },
-  "include": ["./src"],
+  "include": ["./src/**/*"],
   "exclude": ["./src/**/__test__/**/generated"],
   "references": [
     { "path": "../../../../packages/commons/fs-utils" },
+    { "path": "../../../commons" },
     { "path": "../../utils/abstract-generator-cli" },
     { "path": "../../utils/commons" },
     { "path": "../../utils/contexts" },

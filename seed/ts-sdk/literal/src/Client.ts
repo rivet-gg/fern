@@ -3,25 +3,66 @@
  */
 
 import * as core from "./core";
-import { Literal } from "./api/resources/literal/client/Client";
+import { Headers } from "./api/resources/headers/client/Client";
+import { Inlined } from "./api/resources/inlined/client/Client";
+import { Path } from "./api/resources/path/client/Client";
+import { Query } from "./api/resources/query/client/Client";
+import { Reference } from "./api/resources/reference/client/Client";
 
 export declare namespace SeedLiteralClient {
     interface Options {
         environment: core.Supplier<string>;
+        /** Override the X-API-Version header */
+        version?: "02-02-2024";
+        /** Override the X-API-Enable-Audit-Logging header */
+        auditLogging?: true;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
+        /** Override the X-API-Version header */
+        version?: "02-02-2024";
+        /** Override the X-API-Enable-Audit-Logging header */
+        auditLogging?: true;
     }
 }
 
 export class SeedLiteralClient {
-    constructor(protected readonly _options: SeedLiteralClient.Options) {}
+    constructor(protected readonly _options: SeedLiteralClient.Options) {
+    }
 
-    protected _literal: Literal | undefined;
+    protected _headers: Headers | undefined;
 
-    public get literal(): Literal {
-        return (this._literal ??= new Literal(this._options));
+    public get headers(): Headers {
+        return (this._headers ??= new Headers(this._options));
+    }
+
+    protected _inlined: Inlined | undefined;
+
+    public get inlined(): Inlined {
+        return (this._inlined ??= new Inlined(this._options));
+    }
+
+    protected _path: Path | undefined;
+
+    public get path(): Path {
+        return (this._path ??= new Path(this._options));
+    }
+
+    protected _query: Query | undefined;
+
+    public get query(): Query {
+        return (this._query ??= new Query(this._options));
+    }
+
+    protected _reference: Reference | undefined;
+
+    public get reference(): Reference {
+        return (this._reference ??= new Reference(this._options));
     }
 }

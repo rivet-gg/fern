@@ -1,4 +1,16 @@
 {
-    "endpoints": [],
+    "endpoints": [
+        {
+            "id": {
+                "path": "/",
+                "method": "POST",
+                "identifier_override": "endpoint_package.test"
+            },
+            "snippet": {
+                "type": "typescript",
+                "client": "import { SeedNurseryApiClient } from \"@fern/reserved-keywords\";\n\nconst client = new SeedNurseryApiClient({ environment: \"YOUR_BASE_URL\" });\nawait client.package.test({\n    for: \"string\"\n});\n"
+            }
+        }
+    ],
     "types": {}
 }

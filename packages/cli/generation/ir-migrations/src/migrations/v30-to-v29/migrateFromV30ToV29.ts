@@ -1,5 +1,5 @@
+import { GeneratorName } from "@fern-api/configuration";
 import { assertNever } from "@fern-api/core-utils";
-import { GeneratorName } from "@fern-api/generators-configuration";
 import { IrSerialization } from "../../ir-serialization";
 import { IrVersions } from "../../ir-versions";
 import {
@@ -37,7 +37,9 @@ export const V30_TO_V29_MIGRATION: IrMigration<
         [GeneratorName.RUBY_MODEL]: GeneratorWasNotCreatedYet,
         [GeneratorName.RUBY_SDK]: GeneratorWasNotCreatedYet,
         [GeneratorName.CSHARP_MODEL]: GeneratorWasNotCreatedYet,
-        [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet
+        [GeneratorName.CSHARP_SDK]: GeneratorWasNotCreatedYet,
+        [GeneratorName.SWIFT_MODEL]: GeneratorWasNotCreatedYet,
+        [GeneratorName.SWIFT_SDK]: GeneratorWasNotCreatedYet
     },
     jsonifyEarlierVersion: (ir) =>
         IrSerialization.V29.IntermediateRepresentation.jsonOrThrow(ir, {

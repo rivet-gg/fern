@@ -4,25 +4,34 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .exception_info import ExceptionInfo
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class ExceptionV2_Generic(ExceptionInfo):
-    type: typing_extensions.Literal["generic"]
+class ExceptionV2_Generic(UniversalBaseModel):
+    type: typing.Literal["generic"] = "generic"
+    exception_type: str = pydantic.Field(alias="exceptionType")
+    exception_message: str = pydantic.Field(alias="exceptionMessage")
+    exception_stacktrace: str = pydantic.Field(alias="exceptionStacktrace")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class ExceptionV2_Timeout(pydantic.BaseModel):
-    type: typing_extensions.Literal["timeout"]
+class ExceptionV2_Timeout(UniversalBaseModel):
+    type: typing.Literal["timeout"] = "timeout"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 ExceptionV2 = typing.Union[ExceptionV2_Generic, ExceptionV2_Timeout]

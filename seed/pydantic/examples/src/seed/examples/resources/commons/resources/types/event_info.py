@@ -4,34 +4,47 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .metadata import Metadata
+from .....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .tag import Tag
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+
+class EventInfo_Metadata(UniversalBaseModel):
+    """
+    Examples
+    --------
+    from seed.examples.resources.commons.resources import EventInfo_Metadata
+
+    EventInfo_Metadata(
+        id="metadata-alskjfg8",
+        data={"one": "two"},
+        json_string='{"one": "two"}',
+    )
+    """
+
+    type: typing.Literal["metadata"] = "metadata"
+    id: str
+    data: typing.Optional[typing.Dict[str, str]] = None
+    json_string: typing.Optional[str] = pydantic.Field(alias="jsonString", default=None)
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class EventInfo_Metadata(Metadata):
-    type: typing_extensions.Literal["metadata"]
-
-    class Config:
-        allow_population_by_field_name = True
-
-
-class EventInfo_Tag(pydantic.BaseModel):
-    type: typing_extensions.Literal["tag"]
+class EventInfo_Tag(UniversalBaseModel):
     value: Tag
+    type: typing.Literal["tag"] = "tag"
 
 
 """
-from seed.examples.resources.commons import EventInfo_Metadata
+from seed.examples.resources.commons.resources import EventInfo_Metadata
 
 EventInfo_Metadata(
-    type="metadata",
     id="metadata-alskjfg8",
     data={"one": "two"},
     json_string='{"one": "two"}',

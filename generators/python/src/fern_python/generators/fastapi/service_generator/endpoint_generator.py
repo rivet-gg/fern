@@ -36,6 +36,8 @@ class EndpointGenerator:
 
         self._custom_config = FastAPICustomConfig.parse_obj(self._context.generator_config.custom_config or {})
 
+        self._is_async = self.is_async()
+
         self._parameters: List[EndpointParameter] = []
         if endpoint.request_body is not None:
             self._parameters.append(
@@ -65,6 +67,17 @@ class EndpointGenerator:
         if endpoint.auth:
             self._parameters.append(AuthEndpointParameter(context=context))
 
+    def get_endpoint_dot_delimited_path(self) -> str:
+        service_path = [part.original_name for part in self._service.name.fern_filepath.all_parts]
+        endpoint = self._endpoint.name.get_as_name().original_name
+        return f"{'.'.join(service_path)}.{endpoint}"
+
+    def is_async(self) -> bool:
+        if isinstance(self._custom_config.async_handlers, bool):
+            return self._custom_config.async_handlers
+        else:
+            return self.get_endpoint_dot_delimited_path() in self._custom_config.async_handlers
+
     def add_abstract_method_to_class(self, class_declaration: AST.ClassDeclaration) -> None:
         class_declaration.add_abstract_method(
             name=self._get_method_name(),
@@ -73,57 +86,31 @@ class EndpointGenerator:
                 return_type=self._get_return_type(),
             ),
             docstring=AST.Docstring(self._endpoint.docs) if self._endpoint.docs is not None else None,
-            is_async=self._custom_config.async_handlers,
+            is_async=self._is_async,
         )
 
     def _get_return_type(self) -> AST.TypeHint:
         response = self._endpoint.response
-        if response is None:
+        if response is None or response.body is None:
             return AST.TypeHint.none()
-        return self._get_response_body_type(response)
+        return self._get_response_body_type(response.body)
 
     def _get_endpoint_path(self) -> str:
-        api_base_path = self._context.ir.base_path
-        api_prefix_part = (
-            api_base_path.head
-            + "".join(
-                self._get_path_parameter_part_as_str(self._context.ir.path_parameters[i], part.tail)
-                for i, part in enumerate(api_base_path.parts)
-            )
-            if api_base_path is not None
-            else ""
-        )
+        # remove leading slashes from the head and add a single one
+        head = self._endpoint.full_path.head
 
-        base_path = self._service.base_path
-        service_part = (
-            base_path.head
-            + "".join(
-                self._get_path_parameter_part_as_str(self._service.path_parameters[i], part.tail)
-                for i, part in enumerate(base_path.parts)
-            )
-            if base_path is not None
-            else ""
-        )
-        endpoint_part = self._endpoint.path.head + "".join(
-            self._get_path_parameter_part_as_str(self._endpoint.path_parameters[i], part.tail)
-            for i, part in enumerate(self._endpoint.path.parts)
-        )
+        if not head.startswith("/"):
+            head = f"/{head}"
 
-        if api_prefix_part.endswith("/"):
-            api_prefix_part = api_prefix_part[:-1]
+        if len(self._endpoint.full_path.parts) == 0:
+            return head
 
-        if service_part.startswith("/"):
-            service_part = service_part[1:]
-        if service_part.endswith("/"):
-            service_part = service_part[:-1]
+        full_path = head
+        for i, part in enumerate(self._endpoint.full_path.parts):
+            parameter_obj = self._endpoint.all_path_parameters[i]
+            full_path += self._get_path_parameter_part_as_str(parameter_obj, part.tail)
 
-        if endpoint_part.startswith("/"):
-            endpoint_part = endpoint_part[1:]
-
-        endpoint_path = f"{api_prefix_part}/{service_part}/{endpoint_part}"
-        if endpoint_path.endswith("/"):
-            endpoint_path = endpoint_path[:-1]
-        return endpoint_path
+        return full_path
 
     def _get_path_parameter_part_as_str(self, path_parameter: ir_types.PathParameter, tail: str) -> str:
         path = ""
@@ -173,7 +160,7 @@ class EndpointGenerator:
                             args=[AST.Expression(method_on_cls)],
                         )
                     ],
-                    is_async=self._custom_config.async_handlers,
+                    is_async=self._is_async,
                 )
             )
             writer.write_line()
@@ -200,7 +187,7 @@ class EndpointGenerator:
                     writer.write("None")
                 writer.write_line(",")
 
-                if self._endpoint.response is None:
+                if self._endpoint.response is None or self._endpoint.response.body is None:
                     writer.write("status_code=")
                     writer.write_node(AST.TypeHint(Starlette.HTTP_204_NO_CONTENT))
                     writer.write_line(",")
@@ -208,7 +195,7 @@ class EndpointGenerator:
                 writer.write_line(",")
                 writer.write("**")
                 default_tag = ".".join(
-                    [package.snake_case.unsafe_name for package in self._service.name.fern_filepath.all_parts]
+                    [package.snake_case.safe_name for package in self._service.name.fern_filepath.all_parts]
                 )
                 writer.write_node(
                     self._context.core_utilities.get_route_args(
@@ -293,7 +280,7 @@ class EndpointGenerator:
         )
 
     def _get_method_name(self) -> str:
-        return self._endpoint.name.get_as_name().snake_case.unsafe_name
+        return self._endpoint.name.get_as_name().snake_case.safe_name
 
     def _get_reference_to_method_on_cls(self) -> str:
         return f"cls.{self._get_method_name()}"
@@ -309,7 +296,7 @@ class EndpointGenerator:
 
         writer.write_line("try:")
         with writer.indent():
-            return_statement = "return await" if self._custom_config.async_handlers else "return"
+            return_statement = "return await" if self._is_async else "return"
 
             writer.write_line(f"{return_statement} {self._get_reference_to_method_on_cls()}(*args, **kwargs)")
 
@@ -351,12 +338,13 @@ class EndpointGenerator:
             writer.write_line(")")
             writer.write_line(f"raise {CAUGHT_ERROR_NAME}")
 
-    def _get_response_body_type(self, response: ir_types.HttpResponse) -> AST.TypeHint:
-        return response.visit(
+    def _get_response_body_type(self, response_body: ir_types.HttpResponseBody) -> AST.TypeHint:
+        return response_body.visit(
             file_download=raise_file_download_unsupported,
             json=lambda json_response: self._get_json_response_body_type(json_response),
             text=lambda _: AST.TypeHint.str_(),
             streaming=lambda _: raise_streaming_unsupported(),
+            stream_parameter=lambda _: raise_stream_parameter_unsupported(),
         )
 
     def _get_json_response_body_type(
@@ -365,7 +353,8 @@ class EndpointGenerator:
     ) -> AST.TypeHint:
         return json_response.visit(
             response=lambda response: self._context.pydantic_generator_context.get_type_hint_for_type_reference(
-                response.response_body_type
+                response.response_body_type,
+                in_endpoint=True,
             ),
             nested_property_as_response=lambda _: raise_json_nested_property_as_response_unsupported(),
         )
@@ -379,6 +368,10 @@ def convert_http_method_to_fastapi_method_name(http_method: ir_types.HttpMethod)
         patch=lambda: "patch",
         delete=lambda: "delete",
     )
+
+
+def raise_stream_parameter_unsupported() -> Never:
+    raise RuntimeError("streaming parameter is not supported")
 
 
 def raise_streaming_unsupported() -> Never:

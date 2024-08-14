@@ -1,12 +1,19 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import fern.ir.resources as ir_types
 
 from fern_python.codegen import AST
+from fern_python.codegen.ast.nodes.declarations.function.named_function_parameter import (
+    NamedFunctionParameter,
+)
 
 from ...context.sdk_generator_context import SdkGeneratorContext
 from ..constants import DEFAULT_BODY_PARAMETER_VALUE
 from .abstract_request_body_parameters import AbstractRequestBodyParameters
+from .flattened_request_body_parameter_utils import (
+    are_any_properties_optional_in_inlined_request,
+    get_json_body_for_inlined_request,
+)
 
 
 class InlinedRequestBodyParameters(AbstractRequestBodyParameters):
@@ -21,22 +28,68 @@ class InlinedRequestBodyParameters(AbstractRequestBodyParameters):
         self._endpoint = endpoint
         self._request_body = request_body
         self._context = context
+        self._are_any_properties_optional = are_any_properties_optional_in_inlined_request(
+            context, self._get_all_properties_for_inlined_request_body()
+        )
 
-    def get_parameters(self) -> List[AST.NamedFunctionParameter]:
+    def get_parameters(self, names_to_deconflict: Optional[List[str]] = None) -> List[AST.NamedFunctionParameter]:
         parameters: List[AST.NamedFunctionParameter] = []
         for property in self._get_all_properties_for_inlined_request_body():
-            type_hint = self._context.pydantic_generator_context.get_type_hint_for_type_reference(property.value_type)
-            parameters.append(
-                AST.NamedFunctionParameter(
-                    name=self._get_property_name(property),
-                    docs=property.docs,
-                    type_hint=self._context.pydantic_generator_context.get_type_hint_for_type_reference(
-                        property.value_type
+            if not self._is_type_literal(property.value_type):
+                type_hint = self._context.pydantic_generator_context.get_type_hint_for_type_reference(
+                    property.value_type,
+                    in_endpoint=True,
+                )
+                maybe_default_value = self._context.pydantic_generator_context.get_initializer_for_type_reference(
+                    property.value_type
+                )
+                parameters.append(
+                    AST.NamedFunctionParameter(
+                        name=self._get_property_name(property),
+                        docs=property.docs,
+                        type_hint=self._context.pydantic_generator_context.get_type_hint_for_type_reference(
+                            property.value_type,
+                            in_endpoint=True,
+                        ),
+                        initializer=maybe_default_value
+                        if maybe_default_value is not None
+                        else AST.Expression(DEFAULT_BODY_PARAMETER_VALUE)
+                        if type_hint.is_optional
+                        else None,
+                        raw_type=property.value_type,
+                        raw_name=property.name.wire_value,
                     ),
-                    initializer=AST.Expression(DEFAULT_BODY_PARAMETER_VALUE) if type_hint.is_optional else None,
-                ),
-            )
+                )
         return parameters
+
+    def _get_non_parameter_properties(self) -> List[AST.NamedFunctionParameter]:
+        non_param_properties = []
+
+        parameters: List[AST.NamedFunctionParameter] = self.get_parameters()
+        parameter_names = [parameter.name for parameter in parameters]
+        for property in self._get_all_properties_for_inlined_request_body():
+            if not self._get_property_name(property) in parameter_names:
+                type_hint = self._context.pydantic_generator_context.get_type_hint_for_type_reference(
+                    property.value_type,
+                    in_endpoint=True,
+                )
+                non_param_properties.append(
+                    AST.NamedFunctionParameter(
+                        name=self._get_property_name(property),
+                        docs=property.docs,
+                        type_hint=self._context.pydantic_generator_context.get_type_hint_for_type_reference(
+                            property.value_type,
+                            in_endpoint=True,
+                        ),
+                        initializer=AST.Expression(DEFAULT_BODY_PARAMETER_VALUE) if type_hint.is_optional else None,
+                        raw_type=property.value_type,
+                        raw_name=property.name.wire_value,
+                    ),
+                )
+        return non_param_properties
+
+    def _is_type_literal(self, type_reference: ir_types.TypeReference) -> bool:
+        return self._context.get_literal_value(reference=type_reference) is not None
 
     def _get_all_properties_for_inlined_request_body(self) -> List[ir_types.InlinedRequestBodyProperty]:
         properties = self._request_body.properties.copy()
@@ -57,108 +110,26 @@ class InlinedRequestBodyParameters(AbstractRequestBodyParameters):
             )
         return properties
 
+    def _get_properties(self) -> List[NamedFunctionParameter]:
+        return self.get_parameters() + self._get_non_parameter_properties()
+
     def _get_property_name(self, property: ir_types.InlinedRequestBodyProperty) -> str:
-        return property.name.name.snake_case.unsafe_name
+        return property.name.name.snake_case.safe_name
 
-    def get_json_body(self) -> Optional[AST.Expression]:
-        if self._are_any_properties_optional():
-            return AST.Expression(InlinedRequestBodyParameters._REQUEST_VARIABLE_NAME)
-
-        def write(writer: AST.NodeWriter) -> None:
-            writer.write_line("{")
-            with writer.indent():
-                for property in self._get_all_properties_for_inlined_request_body():
-                    writer.write_line(f'"{property.name.wire_value}": {self._get_property_name(property)},')
-            writer.write_line("}")
-
-        return AST.Expression(AST.CodeWriter(write))
-
-    def _are_any_properties_optional(self) -> bool:
-        return any(
-            self._context.pydantic_generator_context.get_type_hint_for_type_reference(
-                body_property.value_type
-            ).is_optional
-            for body_property in self._get_all_properties_for_inlined_request_body()
+    def get_json_body(self, names_to_deconflict: Optional[List[str]] = None) -> Optional[AST.Expression]:
+        return get_json_body_for_inlined_request(
+            self._context,
+            self._get_properties(),
         )
 
     def get_files(self) -> Optional[AST.Expression]:
         return None
 
-    def get_pre_fetch_statements(self) -> Optional[AST.CodeWriter]:
-        if not self._are_any_properties_optional():
-            return None
-
-        optional_properties: List[ir_types.InlinedRequestBodyProperty] = []
-        required_properties: List[ir_types.InlinedRequestBodyProperty] = []
-        for body_property in self._get_all_properties_for_inlined_request_body():
-            type_hint = self._context.pydantic_generator_context.get_type_hint_for_type_reference(
-                body_property.value_type
-            )
-            if type_hint.is_optional:
-                optional_properties.append(body_property)
-            else:
-                required_properties.append(body_property)
-
-        def write(writer: AST.NodeWriter) -> None:
-            writer.write(f"{InlinedRequestBodyParameters._REQUEST_VARIABLE_NAME}: ")
-            writer.write_node(AST.TypeHint.dict(AST.TypeHint.str_(), AST.TypeHint.any()))
-            writer.write(" = ")
-            if len(required_properties) == 0:
-                writer.write_line("{}")
-            else:
-                writer.write_line("{")
-                with writer.indent():
-                    for required_property in required_properties:
-                        if self.is_enum_or_optional_enum(reference=required_property.value_type):
-                            writer.write_line(
-                                f'"{required_property.name.wire_value}": {self._get_property_name(required_property)}.value,'
-                            )
-                        else:
-                            writer.write_line(
-                                f'"{required_property.name.wire_value}": {self._get_property_name(required_property)},'
-                            )
-                writer.write_line("}")
-
-            for optional_property in optional_properties:
-                writer.write_line(
-                    f"if {self._get_property_name(optional_property)} is not {DEFAULT_BODY_PARAMETER_VALUE}:"
-                )
-                with writer.indent():
-                    if self.is_enum_or_optional_enum(reference=optional_property.value_type):
-                        writer.write_line(
-                            f'{InlinedRequestBodyParameters._REQUEST_VARIABLE_NAME}["{optional_property.name.wire_value}"] = {self._get_property_name(optional_property)}.value'
-                        )
-                    else:
-                        writer.write_line(
-                            f'{InlinedRequestBodyParameters._REQUEST_VARIABLE_NAME}["{optional_property.name.wire_value}"] = {self._get_property_name(optional_property)}'
-                        )
-
-        return AST.CodeWriter(write)
-
     def is_default_body_parameter_used(self) -> bool:
-        return self._are_any_properties_optional()
+        return self._are_any_properties_optional
 
     def get_content(self) -> Optional[AST.Expression]:
         return None
 
-    def is_enum_or_optional_enum(self, *, reference: ir_types.TypeReference) -> bool:
-        reference_union = reference.get_as_union()
-        while reference_union.type == "named" or reference_union.type == "container":
-            if reference_union.type == "named":
-                declaration = self._context.pydantic_generator_context.get_declaration_for_type_id(
-                    reference_union.type_id
-                )
-                shape = declaration.shape.get_as_union()
-                if shape.type == "enum":
-                    return True
-                elif shape.type == "alias":
-                    reference_union = shape.alias_of.get_as_union()
-                else:
-                    break
-            elif reference_union.type == "container":
-                container_union = reference_union.container.get_as_union()
-                if container_union.type == "optional":
-                    reference_union = container_union.optional.get_as_union()
-                else:
-                    break
-        return False
+    def get_parameter_name_rewrites(self) -> Dict[ir_types.Name, str]:
+        return {}

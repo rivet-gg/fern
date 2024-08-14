@@ -18,7 +18,7 @@ paths:
                 type: string
               examples:
                 Example1:
-                  value: Hello world!
+                  value: Hello world!\n\nwith\n\tnewlines
       requestBody:
         required: true
         content:
@@ -27,7 +27,7 @@ paths:
               type: string
             examples:
               Example1:
-                value: Hello world!
+                value: Hello world!\n\nwith\n\tnewlines
   /file/notification/{notificationId}:
     get:
       operationId: file_notification_service_getException
@@ -60,12 +60,14 @@ paths:
         - BearerAuth: []
   /file/{filename}:
     get:
+      description: This endpoint returns a file by its name.
       operationId: file_service_getFile
       tags:
         - FileService
       parameters:
         - name: filename
           in: path
+          description: This is a filename
           required: true
           schema:
             type: string
@@ -92,18 +94,22 @@ paths:
         - BearerAuth: []
   /check/{id}:
     get:
+      description: This endpoint checks the health of a resource.
       operationId: health_service_check
       tags:
         - HealthService
       parameters:
         - name: id
           in: path
+          description: The id to check
           required: true
           schema:
             type: string
           examples:
-            Example1:
+            Example0:
               value: id-2sdx82h
+            Example2:
+              value: id-3tey93i
       responses:
         '204':
           description: ''
@@ -111,6 +117,7 @@ paths:
         - BearerAuth: []
   /ping:
     get:
+      description: This endpoint checks the health of the service.
       operationId: health_service_ping
       tags:
         - HealthService
@@ -123,7 +130,7 @@ paths:
               schema:
                 type: boolean
               examples:
-                Example1:
+                Example0:
                   value: true
       security:
         - BearerAuth: []
@@ -152,11 +159,21 @@ paths:
                 Example1:
                   value:
                     id: movie-c06a4ad7
+                    prequel: movie-cv9b914f
                     title: The Boy and the Heron
                     from: Hayao Miyazaki
                     rating: 8
                     type: movie
                     tag: tag-wf9as23d
+                    metadata:
+                      actors:
+                        - Christian Bale
+                        - Florence Pugh
+                        - Willem Dafoe
+                      releaseDate: '2023-12-08'
+                      ratings:
+                        rottenTomatoes: 97
+                        imdb: 7.6
   /movie:
     post:
       operationId: service_createMovie
@@ -183,11 +200,21 @@ paths:
               Example1:
                 value:
                   id: movie-c06a4ad7
+                  prequel: movie-cv9b914f
                   title: The Boy and the Heron
                   from: Hayao Miyazaki
                   rating: 8
                   type: movie
                   tag: tag-wf9as23d
+                  metadata:
+                    actors:
+                      - Christian Bale
+                      - Florence Pugh
+                      - Willem Dafoe
+                    releaseDate: '2023-12-08'
+                    ratings:
+                      rottenTomatoes: 97
+                      imdb: 7.6
   /metadata:
     get:
       operationId: service_getMetadata
@@ -240,8 +267,64 @@ paths:
                       - development
                       - public
                     value: <head>...</head>
+  /response:
+    post:
+      operationId: service_getResponse
+      tags:
+        - Service
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+              examples:
+                Example1:
+                  value:
+                    response: Initializing...
+                    identifiers:
+                      - type: primitive
+                        value: example
+                        label: Primitive
+                      - type: unknown
+                        value: '{}'
+                        label: Unknown
 components:
   schemas:
+    Type:
+      title: Type
+      oneOf:
+        - $ref: '#/components/schemas/BasicType'
+        - $ref: '#/components/schemas/ComplexType'
+    Identifier:
+      title: Identifier
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/Type'
+        value:
+          type: string
+        label:
+          type: string
+      required:
+        - type
+        - value
+        - label
+    BasicType:
+      title: BasicType
+      type: string
+      enum:
+        - primitive
+        - literal
+    ComplexType:
+      title: ComplexType
+      type: string
+      enum:
+        - object
+        - union
+        - unknown
     commonsTag:
       title: commonsTag
       type: string
@@ -322,6 +405,9 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/MovieId'
+        prequel:
+          $ref: '#/components/schemas/MovieId'
+          nullable: true
         title:
           type: string
           example: The Boy and the Heron
@@ -342,6 +428,9 @@ components:
         book:
           type: string
           nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
       required:
         - id
         - title
@@ -349,6 +438,7 @@ components:
         - rating
         - type
         - tag
+        - metadata
     CastMember:
       title: CastMember
       oneOf:
@@ -592,8 +682,21 @@ components:
       type: object
       properties:
         response: {}
+        identifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Identifier'
       required:
         - response
+        - identifiers
+    ResponseType:
+      title: ResponseType
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/Type'
+      required:
+        - type
     Test:
       title: Test
       oneOf:
@@ -617,6 +720,18 @@ components:
               type: boolean
           required:
             - type
+    Entity:
+      title: Entity
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/Type'
+        name:
+          type: string
+          example: unknown
+      required:
+        - type
+        - name
   securitySchemes:
     BearerAuth:
       type: http

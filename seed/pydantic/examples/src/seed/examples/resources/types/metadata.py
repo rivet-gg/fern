@@ -2,60 +2,46 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
-import typing_extensions
+import pydantic
 
-from ...core.datetime_utils import serialize_datetime
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class Base(pydantic.BaseModel):
+class Base(UniversalBaseModel):
     """
-    from seed.examples import Metadata_Html
+    Examples
+    --------
+    from seed.examples.resources import Metadata_Html
 
-    Metadata_Html(type="html", value="<head>...</head>")
+    Metadata_Html(value="<head>...</head>")
     """
 
     extra: typing.Dict[str, str]
     tags: typing.Set[str]
 
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
 
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        json_encoders = {dt.datetime: serialize_datetime}
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 class Metadata_Html(Base):
-    type: typing_extensions.Literal["html"]
     value: str
-
-    class Config:
-        allow_population_by_field_name = True
+    type: typing.Literal["html"] = "html"
 
 
 class Metadata_Markdown(Base):
-    type: typing_extensions.Literal["markdown"]
     value: str
-
-    class Config:
-        allow_population_by_field_name = True
+    type: typing.Literal["markdown"] = "markdown"
 
 
 """
-from seed.examples import Metadata_Html
+from seed.examples.resources import Metadata_Html
 
-Metadata_Html(type="html", value="<head>...</head>")
+Metadata_Html(value="<head>...</head>")
 """
 Metadata = typing.Union[Metadata_Html, Metadata_Markdown]

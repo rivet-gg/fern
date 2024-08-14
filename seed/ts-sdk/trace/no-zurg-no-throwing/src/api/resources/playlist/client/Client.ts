@@ -4,85 +4,110 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as SeedTrace from "../../..";
+import * as SeedTrace from "../../../index";
 import urlJoin from "url-join";
 
 export declare namespace Playlist {
     interface Options {
         environment?: core.Supplier<environments.SeedTraceEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
+        /** Override the X-Random-Header header */
         xRandomHeader?: core.Supplier<string | undefined>;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
+        /** Override the X-Random-Header header */
+        xRandomHeader?: string | undefined;
     }
 }
 
 export class Playlist {
-    constructor(protected readonly _options: Playlist.Options = {}) {}
+    constructor(protected readonly _options: Playlist.Options = {}) {
+    }
 
     /**
      * Create a new playlist
+     *
+     * @param {number} serviceParam
+     * @param {SeedTrace.CreatePlaylistRequest} request
+     * @param {Playlist.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.playlist.createPlaylist(1, {
+     *         datetime: new Date("2024-01-15T09:30:00.000Z"),
+     *         optionalDatetime: new Date("2024-01-15T09:30:00.000Z"),
+     *         body: {
+     *             name: "string",
+     *             problems: ["string"]
+     *         }
+     *     })
      */
-    public async createPlaylist(
-        serviceParam: number,
-        request: SeedTrace.CreatePlaylistRequest,
-        requestOptions?: Playlist.RequestOptions
-    ): Promise<core.APIResponse<SeedTrace.Playlist, SeedTrace.playlist.createPlaylist.Error>> {
+    public async createPlaylist(serviceParam: number, request: SeedTrace.CreatePlaylistRequest, requestOptions?: Playlist.RequestOptions): Promise<core.APIResponse<SeedTrace.Playlist, SeedTrace.playlist.createPlaylist.Error>> {
         const { datetime, optionalDatetime, body: _body } = request;
-        const _queryParams: Record<string, string | string[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
         _queryParams["datetime"] = datetime;
         if (optionalDatetime != null) {
             _queryParams["optionalDatetime"] = optionalDatetime;
         }
 
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/v2/playlist/${serviceParam}/create`
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, `/v2/playlist/${encodeURIComponent(serviceParam)}/create`),
             method: "POST",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
             queryParameters: _queryParams,
+            requestType: "json",
             body: _body,
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: _response.body as SeedTrace.Playlist,
+                body: _response.body as SeedTrace.Playlist
             };
         }
 
         return {
             ok: false,
-            error: SeedTrace.playlist.createPlaylist.Error._unknown(_response.error),
+            error: SeedTrace.playlist.createPlaylist.Error._unknown(_response.error)
         };
     }
 
     /**
      * Returns the user's playlists
+     *
+     * @param {number} serviceParam
+     * @param {SeedTrace.GetPlaylistsRequest} request
+     * @param {Playlist.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.playlist.getPlaylists(1, {
+     *         limit: 1,
+     *         otherField: "string",
+     *         multiLineDocs: "string",
+     *         optionalMultipleField: "string",
+     *         multipleField: "string"
+     *     })
      */
-    public async getPlaylists(
-        serviceParam: number,
-        request: SeedTrace.GetPlaylistsRequest,
-        requestOptions?: Playlist.RequestOptions
-    ): Promise<core.APIResponse<SeedTrace.Playlist[], SeedTrace.playlist.getPlaylists.Error>> {
+    public async getPlaylists(serviceParam: number, request: SeedTrace.GetPlaylistsRequest, requestOptions?: Playlist.RequestOptions): Promise<core.APIResponse<SeedTrace.Playlist[], SeedTrace.playlist.getPlaylists.Error>> {
         const { limit, otherField, multiLineDocs, optionalMultipleField, multipleField } = request;
-        const _queryParams: Record<string, string | string[]> = {};
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (limit != null) {
             _queryParams["limit"] = limit.toString();
         }
@@ -91,199 +116,203 @@ export class Playlist {
         _queryParams["multiLineDocs"] = multiLineDocs;
         if (optionalMultipleField != null) {
             if (Array.isArray(optionalMultipleField)) {
-                _queryParams["optionalMultipleField"] = optionalMultipleField.map((item) => item);
-            } else {
+                _queryParams["optionalMultipleField"] = optionalMultipleField.map(item => item);
+            }
+            else {
                 _queryParams["optionalMultipleField"] = optionalMultipleField;
             }
         }
 
         if (Array.isArray(multipleField)) {
-            _queryParams["multipleField"] = multipleField.map((item) => item);
-        } else {
+            _queryParams["multipleField"] = multipleField.map(item => item);
+        }
+        else {
             _queryParams["multipleField"] = multipleField;
         }
 
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/v2/playlist/${serviceParam}/all`
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, `/v2/playlist/${encodeURIComponent(serviceParam)}/all`),
             method: "GET",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
             queryParameters: _queryParams,
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: _response.body as SeedTrace.Playlist[],
+                body: _response.body as SeedTrace.Playlist[]
             };
         }
 
         return {
             ok: false,
-            error: SeedTrace.playlist.getPlaylists.Error._unknown(_response.error),
+            error: SeedTrace.playlist.getPlaylists.Error._unknown(_response.error)
         };
     }
 
     /**
      * Returns a playlist
+     *
+     * @param {number} serviceParam
+     * @param {SeedTrace.PlaylistId} playlistId
+     * @param {Playlist.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.playlist.getPlaylist(1, "string")
      */
-    public async getPlaylist(
-        serviceParam: number,
-        playlistId: SeedTrace.PlaylistId,
-        requestOptions?: Playlist.RequestOptions
-    ): Promise<core.APIResponse<SeedTrace.Playlist, SeedTrace.playlist.getPlaylist.Error>> {
+    public async getPlaylist(serviceParam: number, playlistId: SeedTrace.PlaylistId, requestOptions?: Playlist.RequestOptions): Promise<core.APIResponse<SeedTrace.Playlist, SeedTrace.playlist.getPlaylist.Error>> {
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/v2/playlist/${serviceParam}/${playlistId}`
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, `/v2/playlist/${encodeURIComponent(serviceParam)}/${encodeURIComponent(playlistId)}`),
             method: "GET",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: _response.body as SeedTrace.Playlist,
+                body: _response.body as SeedTrace.Playlist
             };
         }
 
         if (_response.error.reason === "status-code") {
             switch ((_response.error.body as SeedTrace.playlist.getPlaylist.Error)?.errorName) {
                 case "PlaylistIdNotFoundError":
-                case "UnauthorizedError":
-                    return {
-                        ok: false,
-                        error: _response.error.body as SeedTrace.playlist.getPlaylist.Error,
-                    };
+                case "UnauthorizedError": return {
+                    ok: false,
+                    error: _response.error.body as SeedTrace.playlist.getPlaylist.Error
+                };
             }
         }
 
         return {
             ok: false,
-            error: SeedTrace.playlist.getPlaylist.Error._unknown(_response.error),
+            error: SeedTrace.playlist.getPlaylist.Error._unknown(_response.error)
         };
     }
 
     /**
      * Updates a playlist
+     *
+     * @param {number} serviceParam
+     * @param {SeedTrace.PlaylistId} playlistId
+     * @param {SeedTrace.UpdatePlaylistRequest} request
+     * @param {Playlist.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.playlist.updatePlaylist(1, "string", {
+     *         name: "string",
+     *         problems: ["string"]
+     *     })
      */
-    public async updatePlaylist(
-        serviceParam: number,
-        playlistId: SeedTrace.PlaylistId,
-        request?: SeedTrace.UpdatePlaylistRequest,
-        requestOptions?: Playlist.RequestOptions
-    ): Promise<core.APIResponse<SeedTrace.Playlist | undefined, SeedTrace.playlist.updatePlaylist.Error>> {
+    public async updatePlaylist(serviceParam: number, playlistId: SeedTrace.PlaylistId, request?: SeedTrace.UpdatePlaylistRequest, requestOptions?: Playlist.RequestOptions): Promise<core.APIResponse<SeedTrace.Playlist | undefined, SeedTrace.playlist.updatePlaylist.Error>> {
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/v2/playlist/${serviceParam}/${playlistId}`
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, `/v2/playlist/${encodeURIComponent(serviceParam)}/${encodeURIComponent(playlistId)}`),
             method: "PUT",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
+            requestType: "json",
             body: request != null ? request : undefined,
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: _response.body as SeedTrace.Playlist | undefined,
+                body: _response.body as SeedTrace.Playlist | undefined
             };
         }
 
         if (_response.error.reason === "status-code") {
             switch ((_response.error.body as SeedTrace.playlist.updatePlaylist.Error)?.errorName) {
-                case "PlaylistIdNotFoundError":
-                    return {
-                        ok: false,
-                        error: _response.error.body as SeedTrace.playlist.updatePlaylist.Error,
-                    };
+                case "PlaylistIdNotFoundError": return {
+                    ok: false,
+                    error: _response.error.body as SeedTrace.playlist.updatePlaylist.Error
+                };
             }
         }
 
         return {
             ok: false,
-            error: SeedTrace.playlist.updatePlaylist.Error._unknown(_response.error),
+            error: SeedTrace.playlist.updatePlaylist.Error._unknown(_response.error)
         };
     }
 
     /**
      * Deletes a playlist
+     *
+     * @param {number} serviceParam
+     * @param {SeedTrace.PlaylistId} playlistId
+     * @param {Playlist.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.playlist.deletePlaylist(1, "string")
      */
-    public async deletePlaylist(
-        serviceParam: number,
-        playlistId: SeedTrace.PlaylistId,
-        requestOptions?: Playlist.RequestOptions
-    ): Promise<core.APIResponse<void, SeedTrace.playlist.deletePlaylist.Error>> {
+    public async deletePlaylist(serviceParam: number, playlistId: SeedTrace.PlaylistId, requestOptions?: Playlist.RequestOptions): Promise<core.APIResponse<void, SeedTrace.playlist.deletePlaylist.Error>> {
         const _response = await core.fetcher({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.SeedTraceEnvironment.Prod,
-                `/v2/playlist/${serviceParam}/${playlistId}`
-            ),
+            url: urlJoin(await core.Supplier.get(this._options.environment) ?? environments.SeedTraceEnvironment.Prod, `/v2/playlist/${encodeURIComponent(serviceParam)}/${encodeURIComponent(playlistId)}`),
             method: "DELETE",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Random-Header":
-                    (await core.Supplier.get(this._options.xRandomHeader)) != null
-                        ? await core.Supplier.get(this._options.xRandomHeader)
-                        : undefined,
+                "Authorization": await this._getAuthorizationHeader(),
+                "X-Random-Header": await core.Supplier.get(this._options.xRandomHeader) != null ? await core.Supplier.get(this._options.xRandomHeader) : undefined,
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/trace",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
             return {
                 ok: true,
-                body: undefined,
+                body: undefined
             };
         }
 
         return {
             ok: false,
-            error: SeedTrace.playlist.deletePlaylist.Error._unknown(_response.error),
+            error: SeedTrace.playlist.deletePlaylist.Error._unknown(_response.error)
         };
     }
 
-    protected async _getAuthorizationHeader() {
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
         const bearer = await core.Supplier.get(this._options.token);
         if (bearer != null) {
             return `Bearer ${bearer}`;

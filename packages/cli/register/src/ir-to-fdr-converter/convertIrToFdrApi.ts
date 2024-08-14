@@ -5,10 +5,13 @@ import { convertIrAvailability, convertPackage } from "./convertPackage";
 import { convertTypeReference, convertTypeShape } from "./convertTypeShape";
 import { convertAuth } from "./covertAuth";
 
-export function convertIrToFdrApi(
-    ir: IntermediateRepresentation,
-    snippetsConfig: APIV1Write.SnippetsConfig
-): APIV1Write.ApiDefinition {
+export function convertIrToFdrApi({
+    ir,
+    snippetsConfig
+}: {
+    ir: IntermediateRepresentation;
+    snippetsConfig: APIV1Write.SnippetsConfig;
+}): APIV1Write.ApiDefinition {
     const fdrApi: APIV1Write.ApiDefinition = {
         types: {},
         subpackages: {},
@@ -29,8 +32,7 @@ export function convertIrToFdrApi(
             description: type.docs ?? undefined,
             name: type.name.name.originalName,
             shape: convertTypeShape(type.shape),
-            availability:
-                type.availability != null ? convertIrAvailability({ availability: type.availability }) : undefined
+            availability: convertIrAvailability(type.availability)
         };
     }
 
@@ -38,7 +40,8 @@ export function convertIrToFdrApi(
         const service = subpackage.service != null ? ir.services[subpackage.service] : undefined;
         fdrApi.subpackages[subpackageId] = {
             subpackageId,
-            name: service?.displayName ?? subpackage.name.originalName,
+            displayName: service?.displayName,
+            name: subpackage.name.originalName,
             description: subpackage.docs ?? undefined,
             ...convertPackage(subpackage, ir)
         };

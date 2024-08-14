@@ -1,16 +1,20 @@
-import { ExitStatusUpdate, GeneratorUpdate, LogLevel } from "@fern-fern/generator-exec-sdk/api";
-import * as GeneratorExecParsing from "@fern-fern/generator-exec-sdk/serialization";
 import { IntermediateRepresentation } from "@fern-fern/ir-sdk/api";
 import * as IrSerialization from "@fern-fern/ir-sdk/serialization";
 import { FernPostmanClient } from "@fern-fern/postman-sdk";
 import * as PostmanParsing from "@fern-fern/postman-sdk/serialization";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
-import { Collection, CollectionDefinition } from "postman-collection";
 import { PostmanGeneratorConfigSchema } from "./config/schemas/PostmanGeneratorConfigSchema";
 import { PublishConfigSchema } from "./config/schemas/PublishConfigSchema";
 import { convertToPostmanCollection } from "./convertToPostmanCollection";
-import { GeneratorNotificationService } from "./GeneratorNotificationService";
+import {
+    GeneratorNotificationService,
+    GeneratorExecParsing,
+    ExitStatusUpdate,
+    GeneratorUpdate,
+    LogLevel,
+    parseGeneratorConfig
+} from "@fern-api/generator-commons";
 import { writePostmanGithubWorkflows } from "./writePostmanGithubWorkflows";
 
 const DEFAULT_COLLECTION_OUTPUT_FILENAME = "collection.json";
@@ -21,30 +25,16 @@ export const getCollectionOutputFilename = (postmanGeneratorConfig?: PostmanGene
 
 export async function writePostmanCollection(pathToConfig: string): Promise<void> {
     try {
-        // eslint-disable-next-line no-console
-        console.log("Starting generator...");
-        const configStr = await readFile(pathToConfig);
-        // eslint-disable-next-line no-console
-        console.log(`Read ${pathToConfig}`);
-        const rawConfig = JSON.parse(configStr.toString());
-        const config = await GeneratorExecParsing.GeneratorConfig.parse(rawConfig, {
-            unrecognizedObjectKeys: "passthrough"
-        });
-
-        if (!config.ok) {
-            // eslint-disable-next-line no-console
-            console.log(`Failed to read ${pathToConfig}`);
-            return;
-        }
+        const config = await parseGeneratorConfig(pathToConfig);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const postmanGeneratorConfig = config.value.customConfig as any as PostmanGeneratorConfigSchema;
+        const postmanGeneratorConfig = config.customConfig as any as PostmanGeneratorConfigSchema;
         // eslint-disable-next-line no-console
         console.log("Validated custom config");
 
         const collectionOutputFilename = getCollectionOutputFilename(postmanGeneratorConfig);
 
-        const generatorLoggingClient = new GeneratorNotificationService(config.value);
+        const generatorLoggingClient = new GeneratorNotificationService(config.environment);
         // eslint-disable-next-line no-console
         console.log("Initialized generator logging client");
 
@@ -55,9 +45,9 @@ export async function writePostmanCollection(pathToConfig: string): Promise<void
                 })
             );
 
-            const ir = await loadIntermediateRepresentation(config.value.irFilepath);
+            const ir = await loadIntermediateRepresentation(config.irFilepath);
             // eslint-disable-next-line no-console
-            console.log(`Loaded intermediate representation from ${config.value.irFilepath}`);
+            console.log(`Loaded intermediate representation from ${config.irFilepath}`);
 
             await generatorLoggingClient.sendUpdate(
                 GeneratorUpdate.log({
@@ -73,7 +63,7 @@ export async function writePostmanCollection(pathToConfig: string): Promise<void
             console.log("Converted ir to postman collection");
 
             await writeFile(
-                path.join(config.value.output.path, collectionOutputFilename),
+                path.join(config.output.path, collectionOutputFilename),
                 JSON.stringify(rawCollectionDefinition, undefined, 2)
             );
             // eslint-disable-next-line no-console
@@ -85,7 +75,7 @@ export async function writePostmanCollection(pathToConfig: string): Promise<void
                 })
             );
 
-            const outputMode = config.value.output.mode;
+            const outputMode = config.output.mode;
             if (outputMode.type === "publish" && outputMode.publishTarget != null) {
                 if (outputMode.publishTarget.type !== "postman") {
                     // eslint-disable-next-line no-console
@@ -103,25 +93,13 @@ export async function writePostmanCollection(pathToConfig: string): Promise<void
                         apiKey: outputMode.publishTarget.apiKey,
                         workspaceId: outputMode.publishTarget.workspaceId
                     },
-                    collectionDefinition: {
-                        ...rawCollectionDefinition,
-                        item: rawCollectionDefinition.item.map((item) => {
-                            if (item._type !== "container") {
-                                return item;
-                            }
-                            return {
-                                ...item,
-                                description: item.description ?? undefined
-                            };
-                        }),
-                        auth: rawCollectionDefinition.auth ?? undefined
-                    }
+                    collection: rawCollectionDefinition
                 });
             } else if (outputMode.type === "github") {
                 // eslint-disable-next-line no-console
                 console.log("Writing Github workflows...");
                 await writePostmanGithubWorkflows({
-                    config: config.value,
+                    config,
                     githubOutputMode: outputMode
                 });
             } else if (postmanGeneratorConfig?.publishing != null) {
@@ -129,19 +107,7 @@ export async function writePostmanCollection(pathToConfig: string): Promise<void
                 console.log("Publishing postman collection via legacy custom config...");
                 await publishCollection({
                     publishConfig: postmanGeneratorConfig.publishing,
-                    collectionDefinition: {
-                        ...rawCollectionDefinition,
-                        item: rawCollectionDefinition.item.map((item) => {
-                            if (item._type !== "container") {
-                                return item;
-                            }
-                            return {
-                                ...item,
-                                description: item.description ?? undefined
-                            };
-                        }),
-                        auth: rawCollectionDefinition.auth ?? undefined
-                    }
+                    collection: rawCollectionDefinition
                 });
             } else {
                 // eslint-disable-next-line no-console
@@ -169,10 +135,10 @@ export async function writePostmanCollection(pathToConfig: string): Promise<void
 
 async function publishCollection({
     publishConfig,
-    collectionDefinition
+    collection
 }: {
     publishConfig: PublishConfigSchema;
-    collectionDefinition: CollectionDefinition;
+    collection: PostmanParsing.PostmanCollectionSchema.Raw;
 }) {
     // eslint-disable-next-line no-console
     console.log("Publishing postman collection...");
@@ -186,14 +152,14 @@ async function publishCollection({
         workspace
     });
     const collectionsToUpdate = getCollectionMetadataResponse.collections.filter((collectionMetadata) => {
-        return collectionMetadata.name === collectionDefinition.info?.name;
+        return collectionMetadata.name === collection.info.name;
     });
     if (collectionsToUpdate.length === 0) {
         // eslint-disable-next-line no-console
         console.log("Creating new postman collection!");
         await postman.collection.createCollection({
             workspace,
-            body: { collection: new Collection(collectionDefinition) }
+            body: { collection }
         });
     } else {
         await Promise.all(
@@ -201,7 +167,7 @@ async function publishCollection({
                 // eslint-disable-next-line no-console
                 console.log("Updating postman collection!");
                 await postman.collection.updateCollection(collectionMetadata.uid, {
-                    collection: new Collection(collectionDefinition)
+                    collection
                 });
             })
         );

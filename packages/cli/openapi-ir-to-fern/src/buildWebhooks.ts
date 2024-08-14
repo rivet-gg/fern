@@ -1,11 +1,12 @@
+import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/configuration";
 import { RelativeFilePath } from "@fern-api/fs-utils";
-import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/project-configuration";
+import { Webhook } from "@fern-api/openapi-ir-sdk";
 import { RawSchemas } from "@fern-api/yaml-schema";
-import { Webhook } from "@fern-fern/openapi-ir-model/finalIr";
 import { camelCase, isEqual } from "lodash-es";
 import { buildHeader } from "./buildHeader";
 import { buildTypeReference } from "./buildTypeReference";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { convertFullExample } from "./utils/convertFullExample";
 import { tokenizeString } from "./utils/getEndpointLocation";
 
 export function buildWebhooks(context: OpenApiIrConverterContext): void {
@@ -27,7 +28,17 @@ export function buildWebhooks(context: OpenApiIrConverterContext): void {
                 schema: webhook.payload,
                 context,
                 fileContainingReference: webhookLocation.file
-            })
+            }),
+            examples:
+                webhook.examples != null
+                    ? webhook.examples.map((exampleWebhookCall) => {
+                          return {
+                              docs: exampleWebhookCall.description,
+                              name: exampleWebhookCall.name,
+                              payload: convertFullExample(exampleWebhookCall.payload)
+                          };
+                      })
+                    : undefined
         };
         context.builder.addWebhook(webhookLocation.file, {
             name: webhookLocation.endpointId,
@@ -53,6 +64,17 @@ function getWebhookLocation({
     webhook: Webhook;
     context: OpenApiIrConverterContext;
 }): WebhookLocation | undefined {
+    if (webhook.sdkName != null) {
+        const filename =
+            webhook.sdkName.groupName.length === 0
+                ? "__package__.yml"
+                : `${webhook.sdkName.groupName.map((part) => camelCase(part)).join("/")}.yml`;
+        return {
+            file: RelativeFilePath.of(filename),
+            endpointId: webhook.sdkName.methodName
+        };
+    }
+
     const tag = webhook.tags[0];
     const operationId = webhook.operationId;
 

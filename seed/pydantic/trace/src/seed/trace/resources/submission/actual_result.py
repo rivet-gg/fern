@@ -4,32 +4,34 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .exception_info import ExceptionInfo
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from .exception_v_2 import ExceptionV2
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
-
-class ActualResult_Value(pydantic.BaseModel):
-    type: typing_extensions.Literal["value"]
+class ActualResult_Value(UniversalBaseModel):
     value: VariableValue
+    type: typing.Literal["value"] = "value"
 
 
-class ActualResult_Exception(ExceptionInfo):
-    type: typing_extensions.Literal["exception"]
+class ActualResult_Exception(UniversalBaseModel):
+    type: typing.Literal["exception"] = "exception"
+    exception_type: str = pydantic.Field(alias="exceptionType")
+    exception_message: str = pydantic.Field(alias="exceptionMessage")
+    exception_stacktrace: str = pydantic.Field(alias="exceptionStacktrace")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class ActualResult_ExceptionV2(pydantic.BaseModel):
-    type: typing_extensions.Literal["exceptionV2"]
+class ActualResult_ExceptionV2(UniversalBaseModel):
     value: ExceptionV2
+    type: typing.Literal["exceptionV2"] = "exceptionV2"
 
 
 ActualResult = typing.Union[ActualResult_Value, ActualResult_Exception, ActualResult_ExceptionV2]

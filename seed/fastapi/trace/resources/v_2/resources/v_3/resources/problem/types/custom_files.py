@@ -2,75 +2,71 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ........core.datetime_utils import serialize_datetime
+from ........core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, UniversalRootModel, update_forward_refs
 from .......commons.types.language import Language
 from .basic_custom_files import BasicCustomFiles
 from .files import Files
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def basic(self, value: BasicCustomFiles) -> CustomFiles:
-        return CustomFiles(__root__=_CustomFiles.Basic(**value.dict(exclude_unset=True), type="basic"))
+        if IS_PYDANTIC_V2:
+            return CustomFiles(root=_CustomFiles.Basic(**value.dict(exclude_unset=True), type="basic"))
+        else:
+            return CustomFiles(__root__=_CustomFiles.Basic(**value.dict(exclude_unset=True), type="basic"))
 
     def custom(self, value: typing.Dict[Language, Files]) -> CustomFiles:
-        return CustomFiles(__root__=_CustomFiles.Custom(type="custom", value=value))
+        if IS_PYDANTIC_V2:
+            return CustomFiles(root=_CustomFiles.Custom(type="custom", value=value))
+        else:
+            return CustomFiles(__root__=_CustomFiles.Custom(type="custom", value=value))
 
 
-class CustomFiles(pydantic.BaseModel):
+class CustomFiles(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(self) -> typing.Union[_CustomFiles.Basic, _CustomFiles.Custom]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[_CustomFiles.Basic, _CustomFiles.Custom], pydantic.Field(discriminator="type")
+        ]
+
+        def get_as_union(self) -> typing.Union[_CustomFiles.Basic, _CustomFiles.Custom]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[_CustomFiles.Basic, _CustomFiles.Custom], pydantic.Field(discriminator="type")
+        ]
+
+        def get_as_union(self) -> typing.Union[_CustomFiles.Basic, _CustomFiles.Custom]:
+            return self.__root__
 
     def visit(
         self,
         basic: typing.Callable[[BasicCustomFiles], T_Result],
         custom: typing.Callable[[typing.Dict[Language, Files]], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "basic":
-            return basic(BasicCustomFiles(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-        if self.__root__.type == "custom":
-            return custom(self.__root__.value)
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[_CustomFiles.Basic, _CustomFiles.Custom], pydantic.Field(discriminator="type")
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "basic":
+            return basic(BasicCustomFiles(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
+        if unioned_value.type == "custom":
+            return custom(unioned_value.value)
 
 
 class _CustomFiles:
     class Basic(BasicCustomFiles):
-        type: typing_extensions.Literal["basic"]
+        type: typing.Literal["basic"] = "basic"
 
-        class Config:
-            allow_population_by_field_name = True
-
-    class Custom(pydantic.BaseModel):
-        type: typing_extensions.Literal["custom"]
+    class Custom(UniversalBaseModel):
+        type: typing.Literal["custom"] = "custom"
         value: typing.Dict[Language, Files]
 
 
-CustomFiles.update_forward_refs()
+update_forward_refs(CustomFiles)

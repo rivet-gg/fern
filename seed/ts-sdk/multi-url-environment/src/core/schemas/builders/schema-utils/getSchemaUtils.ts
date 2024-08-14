@@ -5,8 +5,8 @@ import { ParseError } from "./ParseError";
 export interface SchemaUtils<Raw, Parsed> {
     optional: () => Schema<Raw | null | undefined, Parsed | undefined>;
     transform: <Transformed>(transformer: SchemaTransformer<Parsed, Transformed>) => Schema<Raw, Transformed>;
-    parseOrThrow: (raw: unknown, opts?: SchemaOptions) => Promise<Parsed>;
-    jsonOrThrow: (raw: unknown, opts?: SchemaOptions) => Promise<Raw>;
+    parseOrThrow: (raw: unknown, opts?: SchemaOptions) => Parsed;
+    jsonOrThrow: (raw: unknown, opts?: SchemaOptions) => Raw;
 }
 
 export interface SchemaTransformer<Parsed, Transformed> {
@@ -18,20 +18,20 @@ export function getSchemaUtils<Raw, Parsed>(schema: BaseSchema<Raw, Parsed>): Sc
     return {
         optional: () => optional(schema),
         transform: (transformer) => transform(schema, transformer),
-        parseOrThrow: async (raw, opts) => {
-            const parsed = await schema.parse(raw, opts);
+        parseOrThrow: (raw, opts) => {
+            const parsed = schema.parse(raw, opts);
             if (parsed.ok) {
                 return parsed.value;
             }
             throw new ParseError(parsed.errors);
         },
-        jsonOrThrow: async (parsed, opts) => {
-            const raw = await schema.json(parsed, opts);
+        jsonOrThrow: (parsed, opts) => {
+            const raw = schema.json(parsed, opts);
             if (raw.ok) {
                 return raw.value;
             }
             throw new JsonError(raw.errors);
-        },
+        }
     };
 }
 
@@ -47,26 +47,32 @@ export function optional<Raw, Parsed>(
             if (raw == null) {
                 return {
                     ok: true,
-                    value: undefined,
+                    value: undefined
                 };
             }
             return schema.parse(raw, opts);
         },
         json: (parsed, opts) => {
+            if (opts?.omitUndefined && parsed === undefined) {
+                return {
+                    ok: true,
+                    value: undefined
+                };
+            }
             if (parsed == null) {
                 return {
                     ok: true,
-                    value: null,
+                    value: null
                 };
             }
             return schema.json(parsed, opts);
         },
-        getType: () => SchemaType.OPTIONAL,
+        getType: () => SchemaType.OPTIONAL
     };
 
     return {
         ...baseSchema,
-        ...getSchemaUtils(baseSchema),
+        ...getSchemaUtils(baseSchema)
     };
 }
 
@@ -75,25 +81,25 @@ export function transform<Raw, Parsed, Transformed>(
     transformer: SchemaTransformer<Parsed, Transformed>
 ): Schema<Raw, Transformed> {
     const baseSchema: BaseSchema<Raw, Transformed> = {
-        parse: async (raw, opts) => {
-            const parsed = await schema.parse(raw, opts);
+        parse: (raw, opts) => {
+            const parsed = schema.parse(raw, opts);
             if (!parsed.ok) {
                 return parsed;
             }
             return {
                 ok: true,
-                value: transformer.transform(parsed.value),
+                value: transformer.transform(parsed.value)
             };
         },
-        json: async (transformed, opts) => {
-            const parsed = await transformer.untransform(transformed);
+        json: (transformed, opts) => {
+            const parsed = transformer.untransform(transformed);
             return schema.json(parsed, opts);
         },
-        getType: () => schema.getType(),
+        getType: () => schema.getType()
     };
 
     return {
         ...baseSchema,
-        ...getSchemaUtils(baseSchema),
+        ...getSchemaUtils(baseSchema)
     };
 }

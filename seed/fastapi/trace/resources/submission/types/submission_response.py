@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ....core.datetime_utils import serialize_datetime
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, UniversalRootModel, update_forward_refs
 from ...commons.types.problem_id import ProblemId
 from .code_execution_update import (
     CodeExecutionUpdate as resources_submission_types_code_execution_update_CodeExecutionUpdate,
@@ -15,58 +15,117 @@ from .code_execution_update import (
 from .exception_info import ExceptionInfo
 from .terminated_response import TerminatedResponse
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
-
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def server_initialized(self) -> SubmissionResponse:
-        return SubmissionResponse(__root__=_SubmissionResponse.ServerInitialized(type="serverInitialized"))
+        if IS_PYDANTIC_V2:
+            return SubmissionResponse(root=_SubmissionResponse.ServerInitialized(type="serverInitialized"))
+        else:
+            return SubmissionResponse(__root__=_SubmissionResponse.ServerInitialized(type="serverInitialized"))
 
     def problem_initialized(self, value: ProblemId) -> SubmissionResponse:
-        return SubmissionResponse(
-            __root__=_SubmissionResponse.ProblemInitialized(type="problemInitialized", value=value)
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionResponse(
+                root=_SubmissionResponse.ProblemInitialized(type="problemInitialized", value=value)
+            )
+        else:
+            return SubmissionResponse(
+                __root__=_SubmissionResponse.ProblemInitialized(type="problemInitialized", value=value)
+            )
 
     def workspace_initialized(self) -> SubmissionResponse:
-        return SubmissionResponse(__root__=_SubmissionResponse.WorkspaceInitialized(type="workspaceInitialized"))
+        if IS_PYDANTIC_V2:
+            return SubmissionResponse(root=_SubmissionResponse.WorkspaceInitialized(type="workspaceInitialized"))
+        else:
+            return SubmissionResponse(__root__=_SubmissionResponse.WorkspaceInitialized(type="workspaceInitialized"))
 
     def server_errored(self, value: ExceptionInfo) -> SubmissionResponse:
-        return SubmissionResponse(
-            __root__=_SubmissionResponse.ServerErrored(**value.dict(exclude_unset=True), type="serverErrored")
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionResponse(
+                root=_SubmissionResponse.ServerErrored(**value.dict(exclude_unset=True), type="serverErrored")
+            )
+        else:
+            return SubmissionResponse(
+                __root__=_SubmissionResponse.ServerErrored(**value.dict(exclude_unset=True), type="serverErrored")
+            )
 
     def code_execution_update(
         self, value: resources_submission_types_code_execution_update_CodeExecutionUpdate
     ) -> SubmissionResponse:
-        return SubmissionResponse(
-            __root__=_SubmissionResponse.CodeExecutionUpdate(type="codeExecutionUpdate", value=value)
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionResponse(
+                root=_SubmissionResponse.CodeExecutionUpdate(type="codeExecutionUpdate", value=value)
+            )
+        else:
+            return SubmissionResponse(
+                __root__=_SubmissionResponse.CodeExecutionUpdate(type="codeExecutionUpdate", value=value)
+            )
 
     def terminated(self, value: TerminatedResponse) -> SubmissionResponse:
-        return SubmissionResponse(
-            __root__=_SubmissionResponse.Terminated(**value.dict(exclude_unset=True), type="terminated")
-        )
+        if IS_PYDANTIC_V2:
+            return SubmissionResponse(
+                root=_SubmissionResponse.Terminated(**value.dict(exclude_unset=True), type="terminated")
+            )
+        else:
+            return SubmissionResponse(
+                __root__=_SubmissionResponse.Terminated(**value.dict(exclude_unset=True), type="terminated")
+            )
 
 
-class SubmissionResponse(pydantic.BaseModel):
+class SubmissionResponse(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(
-        self,
-    ) -> typing.Union[
-        _SubmissionResponse.ServerInitialized,
-        _SubmissionResponse.ProblemInitialized,
-        _SubmissionResponse.WorkspaceInitialized,
-        _SubmissionResponse.ServerErrored,
-        _SubmissionResponse.CodeExecutionUpdate,
-        _SubmissionResponse.Terminated,
-    ]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[
+                _SubmissionResponse.ServerInitialized,
+                _SubmissionResponse.ProblemInitialized,
+                _SubmissionResponse.WorkspaceInitialized,
+                _SubmissionResponse.ServerErrored,
+                _SubmissionResponse.CodeExecutionUpdate,
+                _SubmissionResponse.Terminated,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _SubmissionResponse.ServerInitialized,
+            _SubmissionResponse.ProblemInitialized,
+            _SubmissionResponse.WorkspaceInitialized,
+            _SubmissionResponse.ServerErrored,
+            _SubmissionResponse.CodeExecutionUpdate,
+            _SubmissionResponse.Terminated,
+        ]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[
+                _SubmissionResponse.ServerInitialized,
+                _SubmissionResponse.ProblemInitialized,
+                _SubmissionResponse.WorkspaceInitialized,
+                _SubmissionResponse.ServerErrored,
+                _SubmissionResponse.CodeExecutionUpdate,
+                _SubmissionResponse.Terminated,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _SubmissionResponse.ServerInitialized,
+            _SubmissionResponse.ProblemInitialized,
+            _SubmissionResponse.WorkspaceInitialized,
+            _SubmissionResponse.ServerErrored,
+            _SubmissionResponse.CodeExecutionUpdate,
+            _SubmissionResponse.Terminated,
+        ]:
+            return self.__root__
 
     def visit(
         self,
@@ -79,70 +138,41 @@ class SubmissionResponse(pydantic.BaseModel):
         ],
         terminated: typing.Callable[[TerminatedResponse], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "serverInitialized":
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "serverInitialized":
             return server_initialized()
-        if self.__root__.type == "problemInitialized":
-            return problem_initialized(self.__root__.value)
-        if self.__root__.type == "workspaceInitialized":
+        if unioned_value.type == "problemInitialized":
+            return problem_initialized(unioned_value.value)
+        if unioned_value.type == "workspaceInitialized":
             return workspace_initialized()
-        if self.__root__.type == "serverErrored":
-            return server_errored(ExceptionInfo(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-        if self.__root__.type == "codeExecutionUpdate":
-            return code_execution_update(self.__root__.value)
-        if self.__root__.type == "terminated":
-            return terminated(TerminatedResponse(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[
-            _SubmissionResponse.ServerInitialized,
-            _SubmissionResponse.ProblemInitialized,
-            _SubmissionResponse.WorkspaceInitialized,
-            _SubmissionResponse.ServerErrored,
-            _SubmissionResponse.CodeExecutionUpdate,
-            _SubmissionResponse.Terminated,
-        ],
-        pydantic.Field(discriminator="type"),
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
+        if unioned_value.type == "serverErrored":
+            return server_errored(ExceptionInfo(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
+        if unioned_value.type == "codeExecutionUpdate":
+            return code_execution_update(unioned_value.value)
+        if unioned_value.type == "terminated":
+            return terminated(TerminatedResponse(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
 
 
 class _SubmissionResponse:
-    class ServerInitialized(pydantic.BaseModel):
-        type: typing_extensions.Literal["serverInitialized"]
+    class ServerInitialized(UniversalBaseModel):
+        type: typing.Literal["serverInitialized"] = "serverInitialized"
 
-    class ProblemInitialized(pydantic.BaseModel):
-        type: typing_extensions.Literal["problemInitialized"]
+    class ProblemInitialized(UniversalBaseModel):
+        type: typing.Literal["problemInitialized"] = "problemInitialized"
         value: ProblemId
 
-    class WorkspaceInitialized(pydantic.BaseModel):
-        type: typing_extensions.Literal["workspaceInitialized"]
+    class WorkspaceInitialized(UniversalBaseModel):
+        type: typing.Literal["workspaceInitialized"] = "workspaceInitialized"
 
     class ServerErrored(ExceptionInfo):
-        type: typing_extensions.Literal["serverErrored"]
+        type: typing.Literal["serverErrored"] = "serverErrored"
 
-        class Config:
-            allow_population_by_field_name = True
-
-    class CodeExecutionUpdate(pydantic.BaseModel):
-        type: typing_extensions.Literal["codeExecutionUpdate"]
+    class CodeExecutionUpdate(UniversalBaseModel):
+        type: typing.Literal["codeExecutionUpdate"] = "codeExecutionUpdate"
         value: resources_submission_types_code_execution_update_CodeExecutionUpdate
 
     class Terminated(TerminatedResponse):
-        type: typing_extensions.Literal["terminated"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["terminated"] = "terminated"
 
 
-SubmissionResponse.update_forward_refs()
+update_forward_refs(SubmissionResponse)

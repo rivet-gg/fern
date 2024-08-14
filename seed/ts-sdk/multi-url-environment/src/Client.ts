@@ -9,20 +9,23 @@ import { S3 } from "./api/resources/s3/client/Client";
 
 export declare namespace SeedMultiUrlEnvironmentClient {
     interface Options {
-        environment?: core.Supplier<
-            environments.SeedMultiUrlEnvironmentEnvironment | environments.SeedMultiUrlEnvironmentEnvironmentUrls
-        >;
+        environment?: core.Supplier<environments.SeedMultiUrlEnvironmentEnvironment | environments.SeedMultiUrlEnvironmentEnvironmentUrls>;
         token: core.Supplier<core.BearerToken>;
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class SeedMultiUrlEnvironmentClient {
-    constructor(protected readonly _options: SeedMultiUrlEnvironmentClient.Options) {}
+    constructor(protected readonly _options: SeedMultiUrlEnvironmentClient.Options) {
+    }
 
     protected _ec2: Ec2 | undefined;
 

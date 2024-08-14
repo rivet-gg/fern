@@ -2,65 +2,124 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ....core.datetime_utils import serialize_datetime
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, UniversalRootModel, update_forward_refs
 from .error_info import ErrorInfo
 from .graded_test_case_update import GradedTestCaseUpdate
 from .recorded_test_case_update import RecordedTestCaseUpdate
 from .running_submission_state import RunningSubmissionState
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def running(self, value: RunningSubmissionState) -> TestSubmissionUpdateInfo:
-        return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Running(type="running", value=value))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionUpdateInfo(root=_TestSubmissionUpdateInfo.Running(type="running", value=value))
+        else:
+            return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Running(type="running", value=value))
 
     def stopped(self) -> TestSubmissionUpdateInfo:
-        return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Stopped(type="stopped"))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionUpdateInfo(root=_TestSubmissionUpdateInfo.Stopped(type="stopped"))
+        else:
+            return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Stopped(type="stopped"))
 
     def errored(self, value: ErrorInfo) -> TestSubmissionUpdateInfo:
-        return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Errored(type="errored", value=value))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionUpdateInfo(root=_TestSubmissionUpdateInfo.Errored(type="errored", value=value))
+        else:
+            return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Errored(type="errored", value=value))
 
     def graded_test_case(self, value: GradedTestCaseUpdate) -> TestSubmissionUpdateInfo:
-        return TestSubmissionUpdateInfo(
-            __root__=_TestSubmissionUpdateInfo.GradedTestCase(**value.dict(exclude_unset=True), type="gradedTestCase")
-        )
+        if IS_PYDANTIC_V2:
+            return TestSubmissionUpdateInfo(
+                root=_TestSubmissionUpdateInfo.GradedTestCase(**value.dict(exclude_unset=True), type="gradedTestCase")
+            )
+        else:
+            return TestSubmissionUpdateInfo(
+                __root__=_TestSubmissionUpdateInfo.GradedTestCase(
+                    **value.dict(exclude_unset=True), type="gradedTestCase"
+                )
+            )
 
     def recorded_test_case(self, value: RecordedTestCaseUpdate) -> TestSubmissionUpdateInfo:
-        return TestSubmissionUpdateInfo(
-            __root__=_TestSubmissionUpdateInfo.RecordedTestCase(
-                **value.dict(exclude_unset=True), type="recordedTestCase"
+        if IS_PYDANTIC_V2:
+            return TestSubmissionUpdateInfo(
+                root=_TestSubmissionUpdateInfo.RecordedTestCase(
+                    **value.dict(exclude_unset=True), type="recordedTestCase"
+                )
             )
-        )
+        else:
+            return TestSubmissionUpdateInfo(
+                __root__=_TestSubmissionUpdateInfo.RecordedTestCase(
+                    **value.dict(exclude_unset=True), type="recordedTestCase"
+                )
+            )
 
     def finished(self) -> TestSubmissionUpdateInfo:
-        return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Finished(type="finished"))
+        if IS_PYDANTIC_V2:
+            return TestSubmissionUpdateInfo(root=_TestSubmissionUpdateInfo.Finished(type="finished"))
+        else:
+            return TestSubmissionUpdateInfo(__root__=_TestSubmissionUpdateInfo.Finished(type="finished"))
 
 
-class TestSubmissionUpdateInfo(pydantic.BaseModel):
+class TestSubmissionUpdateInfo(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(
-        self,
-    ) -> typing.Union[
-        _TestSubmissionUpdateInfo.Running,
-        _TestSubmissionUpdateInfo.Stopped,
-        _TestSubmissionUpdateInfo.Errored,
-        _TestSubmissionUpdateInfo.GradedTestCase,
-        _TestSubmissionUpdateInfo.RecordedTestCase,
-        _TestSubmissionUpdateInfo.Finished,
-    ]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[
+                _TestSubmissionUpdateInfo.Running,
+                _TestSubmissionUpdateInfo.Stopped,
+                _TestSubmissionUpdateInfo.Errored,
+                _TestSubmissionUpdateInfo.GradedTestCase,
+                _TestSubmissionUpdateInfo.RecordedTestCase,
+                _TestSubmissionUpdateInfo.Finished,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _TestSubmissionUpdateInfo.Running,
+            _TestSubmissionUpdateInfo.Stopped,
+            _TestSubmissionUpdateInfo.Errored,
+            _TestSubmissionUpdateInfo.GradedTestCase,
+            _TestSubmissionUpdateInfo.RecordedTestCase,
+            _TestSubmissionUpdateInfo.Finished,
+        ]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[
+                _TestSubmissionUpdateInfo.Running,
+                _TestSubmissionUpdateInfo.Stopped,
+                _TestSubmissionUpdateInfo.Errored,
+                _TestSubmissionUpdateInfo.GradedTestCase,
+                _TestSubmissionUpdateInfo.RecordedTestCase,
+                _TestSubmissionUpdateInfo.Finished,
+            ],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[
+            _TestSubmissionUpdateInfo.Running,
+            _TestSubmissionUpdateInfo.Stopped,
+            _TestSubmissionUpdateInfo.Errored,
+            _TestSubmissionUpdateInfo.GradedTestCase,
+            _TestSubmissionUpdateInfo.RecordedTestCase,
+            _TestSubmissionUpdateInfo.Finished,
+        ]:
+            return self.__root__
 
     def visit(
         self,
@@ -71,72 +130,43 @@ class TestSubmissionUpdateInfo(pydantic.BaseModel):
         recorded_test_case: typing.Callable[[RecordedTestCaseUpdate], T_Result],
         finished: typing.Callable[[], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "running":
-            return running(self.__root__.value)
-        if self.__root__.type == "stopped":
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "running":
+            return running(unioned_value.value)
+        if unioned_value.type == "stopped":
             return stopped()
-        if self.__root__.type == "errored":
-            return errored(self.__root__.value)
-        if self.__root__.type == "gradedTestCase":
-            return graded_test_case(GradedTestCaseUpdate(**self.__root__.dict(exclude_unset=True, exclude={"type"})))
-        if self.__root__.type == "recordedTestCase":
+        if unioned_value.type == "errored":
+            return errored(unioned_value.value)
+        if unioned_value.type == "gradedTestCase":
+            return graded_test_case(GradedTestCaseUpdate(**unioned_value.dict(exclude_unset=True, exclude={"type"})))
+        if unioned_value.type == "recordedTestCase":
             return recorded_test_case(
-                RecordedTestCaseUpdate(**self.__root__.dict(exclude_unset=True, exclude={"type"}))
+                RecordedTestCaseUpdate(**unioned_value.dict(exclude_unset=True, exclude={"type"}))
             )
-        if self.__root__.type == "finished":
+        if unioned_value.type == "finished":
             return finished()
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[
-            _TestSubmissionUpdateInfo.Running,
-            _TestSubmissionUpdateInfo.Stopped,
-            _TestSubmissionUpdateInfo.Errored,
-            _TestSubmissionUpdateInfo.GradedTestCase,
-            _TestSubmissionUpdateInfo.RecordedTestCase,
-            _TestSubmissionUpdateInfo.Finished,
-        ],
-        pydantic.Field(discriminator="type"),
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
 
 
 class _TestSubmissionUpdateInfo:
-    class Running(pydantic.BaseModel):
-        type: typing_extensions.Literal["running"]
+    class Running(UniversalBaseModel):
+        type: typing.Literal["running"] = "running"
         value: RunningSubmissionState
 
-    class Stopped(pydantic.BaseModel):
-        type: typing_extensions.Literal["stopped"]
+    class Stopped(UniversalBaseModel):
+        type: typing.Literal["stopped"] = "stopped"
 
-    class Errored(pydantic.BaseModel):
-        type: typing_extensions.Literal["errored"]
+    class Errored(UniversalBaseModel):
+        type: typing.Literal["errored"] = "errored"
         value: ErrorInfo
 
     class GradedTestCase(GradedTestCaseUpdate):
-        type: typing_extensions.Literal["gradedTestCase"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["gradedTestCase"] = "gradedTestCase"
 
     class RecordedTestCase(RecordedTestCaseUpdate):
-        type: typing_extensions.Literal["recordedTestCase"]
+        type: typing.Literal["recordedTestCase"] = "recordedTestCase"
 
-        class Config:
-            allow_population_by_field_name = True
-
-    class Finished(pydantic.BaseModel):
-        type: typing_extensions.Literal["finished"]
+    class Finished(UniversalBaseModel):
+        type: typing.Literal["finished"] = "finished"
 
 
-TestSubmissionUpdateInfo.update_forward_refs()
+update_forward_refs(TestSubmissionUpdateInfo)

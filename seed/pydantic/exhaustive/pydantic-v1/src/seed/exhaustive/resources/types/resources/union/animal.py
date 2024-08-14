@@ -4,24 +4,35 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .cat import Cat
-from .dog import Dog
-
-
-class Animal_Dog(Dog):
-    animal: typing_extensions.Literal["dog"]
-
-    class Config:
-        allow_population_by_field_name = True
+from .....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class Animal_Cat(Cat):
-    animal: typing_extensions.Literal["cat"]
+class Animal_Dog(UniversalBaseModel):
+    animal: typing.Literal["dog"] = "dog"
+    name: str
+    likes_to_woof: bool = pydantic.Field(alias="likesToWoof")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class Animal_Cat(UniversalBaseModel):
+    animal: typing.Literal["cat"] = "cat"
+    name: str
+    likes_to_meow: bool = pydantic.Field(alias="likesToMeow")
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 Animal = typing.Union[Animal_Dog, Animal_Cat]

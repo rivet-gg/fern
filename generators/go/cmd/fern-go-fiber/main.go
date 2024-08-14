@@ -27,11 +27,14 @@ func run(config *cmd.Config, coordinator *coordinator.Client) ([]*generator.File
 		config.EnableExplicitNull,
 		config.IncludeLegacyClientOptions,
 		includeReadme,
+		config.Whitelabel,
 		config.Organization,
 		config.Version,
 		config.IrFilepath,
+		config.SnippetFilepath,
 		config.ImportPath,
 		config.PackageName,
+		config.UnionVersion,
 		config.Module,
 	)
 	if err != nil {

@@ -1,13 +1,13 @@
-import { HttpEndpoint } from "@fern-fern/ir-sdk/api";
-import { Fetcher, visitJavaScriptRuntime } from "@fern-typescript/commons";
-import { SdkContext } from "@fern-typescript/contexts";
+import { ExampleEndpointCall, HttpEndpoint } from "@fern-fern/ir-sdk/api";
+import { Fetcher, GetReferenceOpts, visitJavaScriptRuntime } from "@fern-typescript/commons";
+import { EndpointSignature, GeneratedEndpointImplementation, SdkContext } from "@fern-typescript/contexts";
 import { ts } from "ts-morph";
 import { GeneratedEndpointRequest } from "../endpoint-request/GeneratedEndpointRequest";
 import { GeneratedSdkClientClassImpl } from "../GeneratedSdkClientClassImpl";
 import { GeneratedEndpointResponse } from "./default/endpoint-response/GeneratedEndpointResponse";
-import { EndpointSignature, GeneratedEndpointImplementation } from "./GeneratedEndpointImplementation";
 import { buildUrl } from "./utils/buildUrl";
 import {
+    getAbortSignalExpression,
     getMaxRetriesExpression,
     getRequestOptionsParameter,
     getTimeoutExpression
@@ -22,6 +22,8 @@ export declare namespace GeneratedFileDownloadEndpointImplementation {
         request: GeneratedEndpointRequest;
         response: GeneratedEndpointResponse;
         includeSerdeLayer: boolean;
+        retainOriginalCasing: boolean;
+        omitUndefined: boolean;
     }
 }
 
@@ -33,6 +35,8 @@ export class GeneratedFileDownloadEndpointImplementation implements GeneratedEnd
     private request: GeneratedEndpointRequest;
     private response: GeneratedEndpointResponse;
     private includeSerdeLayer: boolean;
+    private retainOriginalCasing: boolean;
+    private omitUndefined: boolean;
 
     constructor({
         endpoint,
@@ -41,7 +45,9 @@ export class GeneratedFileDownloadEndpointImplementation implements GeneratedEnd
         defaultTimeoutInSeconds,
         request,
         response,
-        includeSerdeLayer
+        includeSerdeLayer,
+        retainOriginalCasing,
+        omitUndefined
     }: GeneratedFileDownloadEndpointImplementation.Init) {
         this.endpoint = endpoint;
         this.generatedSdkClientClass = generatedSdkClientClass;
@@ -50,10 +56,36 @@ export class GeneratedFileDownloadEndpointImplementation implements GeneratedEnd
         this.request = request;
         this.response = response;
         this.includeSerdeLayer = includeSerdeLayer;
+        this.retainOriginalCasing = retainOriginalCasing;
+        this.omitUndefined = omitUndefined;
     }
 
-    public getExample(): ts.Expression | undefined {
-        return undefined;
+    public getExample(args: {
+        context: SdkContext;
+        example: ExampleEndpointCall;
+        opts: GetReferenceOpts;
+        clientReference: ts.Identifier;
+    }): ts.Expression | undefined {
+        const exampleParameters = this.request.getExampleEndpointParameters({
+            context: args.context,
+            example: args.example,
+            opts: args.opts
+        });
+        if (exampleParameters == null) {
+            return undefined;
+        }
+        return ts.factory.createAwaitExpression(
+            ts.factory.createCallExpression(
+                ts.factory.createPropertyAccessExpression(
+                    this.generatedSdkClientClass.accessFromRootClient({
+                        referenceToRootClient: args.clientReference
+                    }),
+                    ts.factory.createIdentifier(this.endpoint.name.camelCase.unsafeName)
+                ),
+                undefined,
+                exampleParameters
+            )
+        );
     }
 
     public getOverloads(): EndpointSignature[] {
@@ -107,7 +139,9 @@ export class GeneratedFileDownloadEndpointImplementation implements GeneratedEnd
             endpoint: this.endpoint,
             generatedClientClass: this.generatedSdkClientClass,
             context,
-            includeSerdeLayer: this.includeSerdeLayer
+            includeSerdeLayer: this.includeSerdeLayer,
+            retainOriginalCasing: this.retainOriginalCasing,
+            omitUndefined: this.omitUndefined
         });
         if (url != null) {
             return context.externalDependencies.urlJoin.invoke([referenceToEnvironment, url]);
@@ -129,6 +163,11 @@ export class GeneratedFileDownloadEndpointImplementation implements GeneratedEnd
             }),
             maxRetries: getMaxRetriesExpression({
                 maxRetriesReference: this.generatedSdkClientClass.getReferenceToMaxRetries.bind(
+                    this.generatedSdkClientClass
+                )
+            }),
+            abortSignal: getAbortSignalExpression({
+                abortSignalReference: this.generatedSdkClientClass.getReferenceToAbortSignal.bind(
                     this.generatedSdkClientClass
                 )
             }),

@@ -4,24 +4,40 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .test_submission_state import TestSubmissionState
-from .workspace_submission_state import WorkspaceSubmissionState
-
-
-class SubmissionTypeState_Test(TestSubmissionState):
-    type: typing_extensions.Literal["test"]
-
-    class Config:
-        allow_population_by_field_name = True
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..commons.problem_id import ProblemId
+from ..commons.test_case import TestCase
+from .test_submission_status import TestSubmissionStatus
+from .workspace_submission_status import WorkspaceSubmissionStatus
 
 
-class SubmissionTypeState_Workspace(WorkspaceSubmissionState):
-    type: typing_extensions.Literal["workspace"]
+class SubmissionTypeState_Test(UniversalBaseModel):
+    type: typing.Literal["test"] = "test"
+    problem_id: ProblemId = pydantic.Field(alias="problemId")
+    default_test_cases: typing.List[TestCase] = pydantic.Field(alias="defaultTestCases")
+    custom_test_cases: typing.List[TestCase] = pydantic.Field(alias="customTestCases")
+    status: TestSubmissionStatus
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class SubmissionTypeState_Workspace(UniversalBaseModel):
+    type: typing.Literal["workspace"] = "workspace"
+    status: WorkspaceSubmissionStatus
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 SubmissionTypeState = typing.Union[SubmissionTypeState_Test, SubmissionTypeState_Workspace]

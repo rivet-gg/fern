@@ -8,12 +8,37 @@ export class FetcherImpl extends CoreUtility implements Fetcher {
     public readonly MANIFEST = {
         name: "fetcher",
         repoInfoForTesting: {
-            path: RelativeFilePath.of("packages/core-utilities/fetcher/src")
+            path: RelativeFilePath.of("generators/typescript/utils/core-utilities/fetcher/src/fetcher")
         },
-        originalPathOnDocker: AbsoluteFilePath.of("/assets/fetcher"),
+        unitTests: {
+            fromDirectory: RelativeFilePath.of("__test__"),
+            findAndReplace: {
+                "../createRequestUrl": "../../../src/core/fetcher/createRequestUrl",
+                "../Fetcher": "../../../src/core/fetcher/Fetcher",
+                "../../runtime": "../../../src/core/runtime",
+                "../getFetchFn": "../../../src/core/fetcher/getFetchFn",
+                "../getRequestBody": "../../../src/core/fetcher/getRequestBody",
+                "../getResponseBody": "../../../src/core/fetcher/getResponseBody",
+                "../makeRequest": "../../../src/core/fetcher/makeRequest",
+                "../requestWithRetries": "../../../src/core/fetcher/requestWithRetries",
+                "../signals": "../../../src/core/fetcher/signals",
+                "../../stream-wrappers/Node18UniversalStreamWrapper":
+                    "../../../../src/core/fetcher/stream-wrappers/Node18UniversalStreamWrapper",
+                "../../stream-wrappers/NodePre18StreamWrapper":
+                    "../../../../src/core/fetcher/stream-wrappers/NodePre18StreamWrapper",
+                "../../stream-wrappers/UndiciStreamWrapper":
+                    "../../../../src/core/fetcher/stream-wrappers/UndiciStreamWrapper",
+                "../../stream-wrappers/chooseStreamWrapper":
+                    "../../../../src/core/fetcher/stream-wrappers/chooseStreamWrapper",
+                "../stream-wrappers/chooseStreamWrapper":
+                    "../../../src/core/fetcher/stream-wrappers/chooseStreamWrapper"
+            }
+        },
+        originalPathOnDocker: AbsoluteFilePath.of("/assets/fetcher/fetcher"),
         pathInCoreUtilities: [{ nameOnDisk: "fetcher", exportDeclaration: { exportAll: true } }],
         addDependencies: (dependencyManager: DependencyManager): void => {
-            dependencyManager.addDependency("form-data", "4.0.0");
+            dependencyManager.addDependency("form-data", "^4.0.0");
+            dependencyManager.addDependency("formdata-node", "^6.0.3");
             dependencyManager.addDependency("node-fetch", "2.7.0");
             dependencyManager.addDependency("qs", "6.11.2");
             dependencyManager.addDependency("@types/qs", "6.9.8", {
@@ -24,7 +49,6 @@ export class FetcherImpl extends CoreUtility implements Fetcher {
             });
         }
     };
-
     public readonly Fetcher: Fetcher["Fetcher"] = {
         Args: {
             properties: {
@@ -37,7 +61,10 @@ export class FetcherImpl extends CoreUtility implements Fetcher {
                 body: "body",
                 timeoutMs: "timeoutMs",
                 withCredentials: "withCredentials",
-                responseType: "responseType"
+                requestType: "requestType",
+                responseType: "responseType",
+                abortSignal: "abortSignal",
+                duplex: "duplex"
             },
             _getReferenceToType: this.getReferenceToTypeInFetcherModule("Args")
         },
@@ -86,14 +113,16 @@ export class FetcherImpl extends CoreUtility implements Fetcher {
                     )
                 );
             }
-            properties.push(
-                ts.factory.createPropertyAssignment(
-                    this.Fetcher.Args.properties.contentType,
-                    typeof args.contentType === "string"
-                        ? ts.factory.createStringLiteral(args.contentType)
-                        : args.contentType
-                )
-            );
+            if (args.contentType != null) {
+                properties.push(
+                    ts.factory.createPropertyAssignment(
+                        this.Fetcher.Args.properties.contentType,
+                        typeof args.contentType === "string"
+                            ? ts.factory.createStringLiteral(args.contentType)
+                            : args.contentType
+                    )
+                );
+            }
             if (args.queryParameters != null) {
                 properties.push(
                     ts.factory.createPropertyAssignment(
@@ -101,6 +130,17 @@ export class FetcherImpl extends CoreUtility implements Fetcher {
                         args.queryParameters
                     )
                 );
+            }
+            if (args.requestType != null && args.responseType !== "json") {
+                properties.push(
+                    ts.factory.createPropertyAssignment(
+                        this.Fetcher.Args.properties.requestType,
+                        ts.factory.createStringLiteral(args.requestType)
+                    )
+                );
+            }
+            if (args.duplex != null) {
+                properties.push(ts.factory.createPropertyAssignment(this.Fetcher.Args.properties.duplex, args.duplex));
             }
             if (args.body != null) {
                 properties.push(ts.factory.createPropertyAssignment(this.Fetcher.Args.properties.body, args.body));
@@ -129,12 +169,32 @@ export class FetcherImpl extends CoreUtility implements Fetcher {
                     )
                 );
             }
+            if (args.abortSignal) {
+                properties.push(
+                    ts.factory.createPropertyAssignment(this.Fetcher.Args.properties.abortSignal, args.abortSignal)
+                );
+            }
 
             return ts.factory.createAwaitExpression(
                 ts.factory.createCallExpression(referenceToFetcher, cast != null ? [cast] : [], [
                     ts.factory.createObjectLiteralExpression(properties, true)
                 ])
             );
+        }
+    };
+
+    public readonly RUNTIME = {
+        type: {
+            _getReferenceTo: this.withExportedName(
+                "RUNTIME",
+                (RUNTIME) => () => ts.factory.createPropertyAccessExpression(RUNTIME.getExpression(), "type")
+            )
+        },
+        version: {
+            _getReferenceTo: this.withExportedName(
+                "RUNTIME",
+                (RUNTIME) => () => ts.factory.createPropertyAccessExpression(RUNTIME.getExpression(), "version")
+            )
         }
     };
 

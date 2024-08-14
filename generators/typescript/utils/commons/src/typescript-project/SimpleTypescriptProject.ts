@@ -5,15 +5,20 @@ import { IPackageJson } from "package-json-type";
 import { CompilerOptions, ModuleKind, ModuleResolutionKind, ScriptTarget } from "ts-morph";
 import { DependencyType, PackageDependencies } from "../dependency-manager/DependencyManager";
 import { NpmPackage } from "../NpmPackage";
+import { JSR } from "./JSR";
+import { mergeExtraConfigs } from "./mergeExtraConfigs";
 import { TypescriptProject } from "./TypescriptProject";
 
 const FERN_IGNORE_FILENAME = ".fernignore";
 
 export declare namespace SimpleTypescriptProject {
     export interface Init extends TypescriptProject.Init {
+        outputJsr: boolean;
         npmPackage: NpmPackage | undefined;
         dependencies: PackageDependencies;
         outputEsm: boolean;
+        resolutions: Record<string, string>;
+        extraConfigs: Record<string, unknown> | undefined;
     }
 }
 
@@ -25,12 +30,26 @@ export class SimpleTypescriptProject extends TypescriptProject {
     private npmPackage: NpmPackage | undefined;
     private dependencies: PackageDependencies;
     private outputEsm: boolean;
+    private resolutions: Record<string, string>;
+    private extraConfigs: Record<string, unknown> | undefined;
+    private outputJsr: boolean;
 
-    constructor({ npmPackage, dependencies, outputEsm, ...superInit }: SimpleTypescriptProject.Init) {
+    constructor({
+        npmPackage,
+        dependencies,
+        outputEsm,
+        resolutions,
+        extraConfigs,
+        outputJsr,
+        ...superInit
+    }: SimpleTypescriptProject.Init) {
         super(superInit);
         this.npmPackage = npmPackage;
         this.dependencies = dependencies;
         this.outputEsm = outputEsm;
+        this.resolutions = resolutions;
+        this.extraConfigs = extraConfigs;
+        this.outputJsr = outputJsr ?? false;
     }
 
     protected async addFilesToVolume(): Promise<void> {
@@ -39,6 +58,9 @@ export class SimpleTypescriptProject extends TypescriptProject {
         await this.generatePrettierRc();
         await this.generateTsConfig();
         await this.generatePackageJson();
+        if (this.outputJsr) {
+            await this.generateJsrJson();
+        }
     }
 
     protected getYarnFormatCommand(): string[] {
@@ -52,12 +74,7 @@ export class SimpleTypescriptProject extends TypescriptProject {
     private async generateGitIgnore(): Promise<void> {
         await this.writeFileToVolume(
             RelativeFilePath.of(".gitignore"),
-            [
-                "node_modules",
-                ".DS_Store",
-                `/${SimpleTypescriptProject.DIST_DIRECTORY}`,
-                ...this.getDistFiles().map((distFile) => `/${distFile}`)
-            ].join("\n")
+            ["node_modules", ".DS_Store", `/${SimpleTypescriptProject.DIST_DIRECTORY}`].join("\n")
         );
     }
 
@@ -67,6 +84,7 @@ export class SimpleTypescriptProject extends TypescriptProject {
             [
                 "node_modules",
                 SimpleTypescriptProject.SRC_DIRECTORY,
+                SimpleTypescriptProject.TEST_DIRECTORY,
                 ".gitignore",
                 ".github",
                 FERN_IGNORE_FILENAME,
@@ -97,7 +115,6 @@ export class SimpleTypescriptProject extends TypescriptProject {
             esModuleInterop: true,
             skipLibCheck: true,
             declaration: true,
-            noUnusedParameters: true,
             outDir: SimpleTypescriptProject.DIST_DIRECTORY,
             rootDir: SimpleTypescriptProject.SRC_DIRECTORY,
             baseUrl: SimpleTypescriptProject.SRC_DIRECTORY
@@ -139,12 +156,19 @@ export class SimpleTypescriptProject extends TypescriptProject {
             };
         }
 
+        if (Object.entries(this.resolutions).length > 0) {
+            packageJson = {
+                ...packageJson,
+                resolutions: this.resolutions
+            };
+        }
+
         packageJson = {
             ...packageJson,
             main: "./index.js",
             types: "./index.d.ts",
             scripts: {
-                [SimpleTypescriptProject.FORMAT_SCRIPT_NAME]: `prettier --write '${SimpleTypescriptProject.SRC_DIRECTORY}/**/*.ts'`,
+                [SimpleTypescriptProject.FORMAT_SCRIPT_NAME]: "prettier . --write --ignore-unknown",
                 [SimpleTypescriptProject.BUILD_SCRIPT_NAME]: "tsc",
                 prepack: `cp -rv ${SimpleTypescriptProject.DIST_DIRECTORY}/. .`
             }
@@ -165,17 +189,48 @@ export class SimpleTypescriptProject extends TypescriptProject {
                     ...this.extraDependencies
                 };
             }
-            if (Object.keys(this.dependencies[DependencyType.PEER]).length > 0) {
-                draft.peerDependencies = this.dependencies[DependencyType.PEER];
+            if (
+                Object.keys(this.dependencies[DependencyType.PEER]).length > 0 ||
+                Object.keys(this.extraPeerDependencies).length > 0
+            ) {
+                draft.peerDependencies = {
+                    ...this.dependencies[DependencyType.PEER],
+                    ...this.extraPeerDependencies
+                };
+            }
+            if (Object.keys(this.extraPeerDependenciesMeta).length > 0) {
+                draft.peerDependenciesMeta = {
+                    ...this.extraPeerDependenciesMeta
+                };
             }
             draft.devDependencies = {
                 ...this.dependencies[DependencyType.DEV],
                 ...this.getDevDependencies(),
                 ...this.extraDevDependencies
             };
+
+            draft.browser = {
+                fs: false,
+                os: false,
+                path: false
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            } as any;
         });
 
+        packageJson = mergeExtraConfigs(packageJson, this.extraConfigs);
+
         await this.writeFileToVolume(RelativeFilePath.of("package.json"), JSON.stringify(packageJson, undefined, 4));
+    }
+
+    private async generateJsrJson(): Promise<void> {
+        if (this.npmPackage != null) {
+            const jsr: JSR = {
+                name: this.npmPackage?.packageName,
+                version: this.npmPackage.version,
+                exports: "src/index.ts"
+            };
+            await this.writeFileToVolume(RelativeFilePath.of("jsr.json"), JSON.stringify(jsr, undefined, 4));
+        }
     }
 
     private getDevDependencies(): Record<string, string> {
@@ -184,20 +239,5 @@ export class SimpleTypescriptProject extends TypescriptProject {
             prettier: "2.7.1",
             typescript: "4.6.4"
         };
-    }
-
-    private getDistFiles(): string[] {
-        const rootDirectory = this.tsMorphProject.getDirectory(".");
-        if (rootDirectory == null) {
-            throw new Error("Root ts-morph directory does not exist");
-        }
-
-        return [
-            ...rootDirectory.getSourceFiles().flatMap((file) => {
-                const baseName = file.getBaseNameWithoutExtension();
-                return [`${baseName}.d.ts`, `${baseName}.js`];
-            }),
-            ...rootDirectory.getDirectories().map((directory) => directory.getBaseName())
-        ];
     }
 }

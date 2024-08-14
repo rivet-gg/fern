@@ -13,14 +13,17 @@ import com.fasterxml.jackson.annotation.Nulls;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.seed.examples.core.ObjectMappers;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonInclude(JsonInclude.Include.NON_ABSENT)
 @JsonDeserialize(builder = Movie.Builder.class)
 public final class Movie implements IMovie {
     private final String id;
+
+    private final Optional<String> prequel;
 
     private final String title;
 
@@ -32,22 +35,28 @@ public final class Movie implements IMovie {
 
     private final Optional<String> book;
 
+    private final Map<String, Object> metadata;
+
     private final Map<String, Object> additionalProperties;
 
     private Movie(
             String id,
+            Optional<String> prequel,
             String title,
             String from,
             double rating,
             String tag,
             Optional<String> book,
+            Map<String, Object> metadata,
             Map<String, Object> additionalProperties) {
         this.id = id;
+        this.prequel = prequel;
         this.title = title;
         this.from = from;
         this.rating = rating;
         this.tag = tag;
         this.book = book;
+        this.metadata = metadata;
         this.additionalProperties = additionalProperties;
     }
 
@@ -55,6 +64,12 @@ public final class Movie implements IMovie {
     @java.lang.Override
     public String getId() {
         return id;
+    }
+
+    @JsonProperty("prequel")
+    @java.lang.Override
+    public Optional<String> getPrequel() {
+        return prequel;
     }
 
     @JsonProperty("title")
@@ -96,6 +111,12 @@ public final class Movie implements IMovie {
         return book;
     }
 
+    @JsonProperty("metadata")
+    @java.lang.Override
+    public Map<String, Object> getMetadata() {
+        return metadata;
+    }
+
     @java.lang.Override
     public boolean equals(Object other) {
         if (this == other) return true;
@@ -109,16 +130,19 @@ public final class Movie implements IMovie {
 
     private boolean equalTo(Movie other) {
         return id.equals(other.id)
+                && prequel.equals(other.prequel)
                 && title.equals(other.title)
                 && from.equals(other.from)
                 && rating == other.rating
                 && tag.equals(other.tag)
-                && book.equals(other.book);
+                && book.equals(other.book)
+                && metadata.equals(other.metadata);
     }
 
     @java.lang.Override
     public int hashCode() {
-        return Objects.hash(this.id, this.title, this.from, this.rating, this.tag, this.book);
+        return Objects.hash(
+                this.id, this.prequel, this.title, this.from, this.rating, this.tag, this.book, this.metadata);
     }
 
     @java.lang.Override
@@ -155,9 +179,19 @@ public final class Movie implements IMovie {
     public interface _FinalStage {
         Movie build();
 
+        _FinalStage prequel(Optional<String> prequel);
+
+        _FinalStage prequel(String prequel);
+
         _FinalStage book(Optional<String> book);
 
         _FinalStage book(String book);
+
+        _FinalStage metadata(Map<String, Object> metadata);
+
+        _FinalStage putAllMetadata(Map<String, Object> metadata);
+
+        _FinalStage metadata(String key, Object value);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -172,7 +206,11 @@ public final class Movie implements IMovie {
 
         private String tag;
 
+        private Map<String, Object> metadata = new LinkedHashMap<>();
+
         private Optional<String> book = Optional.empty();
+
+        private Optional<String> prequel = Optional.empty();
 
         @JsonAnySetter
         private Map<String, Object> additionalProperties = new HashMap<>();
@@ -182,11 +220,13 @@ public final class Movie implements IMovie {
         @java.lang.Override
         public Builder from(Movie other) {
             id(other.getId());
+            prequel(other.getPrequel());
             title(other.getTitle());
             from(other.getFrom());
             rating(other.getRating());
             tag(other.getTag());
             book(other.getBook());
+            metadata(other.getMetadata());
             return this;
         }
 
@@ -230,8 +270,28 @@ public final class Movie implements IMovie {
         }
 
         @java.lang.Override
+        public _FinalStage metadata(String key, Object value) {
+            this.metadata.put(key, value);
+            return this;
+        }
+
+        @java.lang.Override
+        public _FinalStage putAllMetadata(Map<String, Object> metadata) {
+            this.metadata.putAll(metadata);
+            return this;
+        }
+
+        @java.lang.Override
+        @JsonSetter(value = "metadata", nulls = Nulls.SKIP)
+        public _FinalStage metadata(Map<String, Object> metadata) {
+            this.metadata.clear();
+            this.metadata.putAll(metadata);
+            return this;
+        }
+
+        @java.lang.Override
         public _FinalStage book(String book) {
-            this.book = Optional.of(book);
+            this.book = Optional.ofNullable(book);
             return this;
         }
 
@@ -243,8 +303,21 @@ public final class Movie implements IMovie {
         }
 
         @java.lang.Override
+        public _FinalStage prequel(String prequel) {
+            this.prequel = Optional.ofNullable(prequel);
+            return this;
+        }
+
+        @java.lang.Override
+        @JsonSetter(value = "prequel", nulls = Nulls.SKIP)
+        public _FinalStage prequel(Optional<String> prequel) {
+            this.prequel = prequel;
+            return this;
+        }
+
+        @java.lang.Override
         public Movie build() {
-            return new Movie(id, title, from, rating, tag, book, additionalProperties);
+            return new Movie(id, prequel, title, from, rating, tag, book, metadata, additionalProperties);
         }
     }
 }

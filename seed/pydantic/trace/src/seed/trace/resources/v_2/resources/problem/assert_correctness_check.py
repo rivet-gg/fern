@@ -4,24 +4,37 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .deep_equality_correctness_check import DeepEqualityCorrectnessCheck
-from .void_function_definition_that_takes_actual_result import VoidFunctionDefinitionThatTakesActualResult
-
-
-class AssertCorrectnessCheck_DeepEquality(DeepEqualityCorrectnessCheck):
-    type: typing_extensions.Literal["deepEquality"]
-
-    class Config:
-        allow_population_by_field_name = True
+from .....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from .function_implementation_for_multiple_languages import FunctionImplementationForMultipleLanguages
+from .parameter import Parameter
+from .parameter_id import ParameterId
 
 
-class AssertCorrectnessCheck_Custom(VoidFunctionDefinitionThatTakesActualResult):
-    type: typing_extensions.Literal["custom"]
+class AssertCorrectnessCheck_DeepEquality(UniversalBaseModel):
+    type: typing.Literal["deepEquality"] = "deepEquality"
+    expected_value_parameter_id: ParameterId = pydantic.Field(alias="expectedValueParameterId")
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class AssertCorrectnessCheck_Custom(UniversalBaseModel):
+    type: typing.Literal["custom"] = "custom"
+    additional_parameters: typing.List[Parameter] = pydantic.Field(alias="additionalParameters")
+    code: FunctionImplementationForMultipleLanguages
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 AssertCorrectnessCheck = typing.Union[AssertCorrectnessCheck_DeepEquality, AssertCorrectnessCheck_Custom]

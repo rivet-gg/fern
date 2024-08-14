@@ -3,16 +3,19 @@
  */
 package com.seed.apiWideBasePath.resources.service;
 
-import com.seed.apiWideBasePath.core.ApiError;
 import com.seed.apiWideBasePath.core.ClientOptions;
 import com.seed.apiWideBasePath.core.ObjectMappers;
 import com.seed.apiWideBasePath.core.RequestOptions;
+import com.seed.apiWideBasePath.core.SeedApiWideBasePathApiException;
+import com.seed.apiWideBasePath.core.SeedApiWideBasePathException;
 import java.io.IOException;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class ServiceClient {
     protected final ClientOptions clientOptions;
@@ -21,32 +24,38 @@ public class ServiceClient {
         this.clientOptions = clientOptions;
     }
 
-    public void post(String serviceParam, int endpointParam) {
-        post(serviceParam, endpointParam, null);
+    public void post(String serviceParam, String resourceParam, int endpointParam) {
+        post(serviceParam, resourceParam, endpointParam, null);
     }
 
-    public void post(String serviceParam, int endpointParam, RequestOptions requestOptions) {
+    public void post(String serviceParam, String resourceParam, int endpointParam, RequestOptions requestOptions) {
         HttpUrl httpUrl = HttpUrl.parse(this.clientOptions.environment().getUrl())
                 .newBuilder()
                 .addPathSegment(serviceParam)
                 .addPathSegment(Integer.toString(endpointParam))
+                .addPathSegment(resourceParam)
                 .build();
         Request okhttpRequest = new Request.Builder()
                 .url(httpUrl)
                 .method("POST", RequestBody.create("", null))
                 .headers(Headers.of(clientOptions.headers(requestOptions)))
                 .build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
                 return;
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            throw new SeedApiWideBasePathApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedApiWideBasePathException("Network error executing HTTP request", e);
         }
     }
 }

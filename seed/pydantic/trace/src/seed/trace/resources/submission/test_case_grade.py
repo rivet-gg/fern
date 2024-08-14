@@ -4,24 +4,38 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .test_case_hidden_grade import TestCaseHiddenGrade
-from .test_case_non_hidden_grade import TestCaseNonHiddenGrade
-
-
-class TestCaseGrade_Hidden(TestCaseHiddenGrade):
-    type: typing_extensions.Literal["hidden"]
-
-    class Config:
-        allow_population_by_field_name = True
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..commons.variable_value import VariableValue
+from .exception_v_2 import ExceptionV2
 
 
-class TestCaseGrade_NonHidden(TestCaseNonHiddenGrade):
-    type: typing_extensions.Literal["nonHidden"]
+class TestCaseGrade_Hidden(UniversalBaseModel):
+    type: typing.Literal["hidden"] = "hidden"
+    passed: bool
 
-    class Config:
-        allow_population_by_field_name = True
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
+
+
+class TestCaseGrade_NonHidden(UniversalBaseModel):
+    type: typing.Literal["nonHidden"] = "nonHidden"
+    passed: bool
+    actual_result: typing.Optional[VariableValue] = pydantic.Field(alias="actualResult", default=None)
+    exception: typing.Optional[ExceptionV2] = None
+    stdout: str
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 TestCaseGrade = typing.Union[TestCaseGrade_Hidden, TestCaseGrade_NonHidden]

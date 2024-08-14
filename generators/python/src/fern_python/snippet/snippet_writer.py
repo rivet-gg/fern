@@ -1,5 +1,5 @@
 import json
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 import fern.ir.resources as ir_types
 
@@ -14,9 +14,11 @@ class SnippetWriter:
         self,
         context: PydanticGeneratorContext,
         type_declaration_snippet_generator: Optional[TypeDeclarationSnippetGenerator] = None,
+        improved_imports: bool = False,
     ):
         self._context = context
         self._type_declaration_snippet_generator = type_declaration_snippet_generator
+        self._improved_imports = improved_imports
 
     def get_snippet_for_example_type_shape(
         self,
@@ -34,28 +36,27 @@ class SnippetWriter:
     def get_class_reference_for_declared_type_name(
         self,
         name: ir_types.DeclaredTypeName,
+        as_request: bool,
     ) -> AST.ClassReference:
         return AST.ClassReference(
             qualified_name_excluding_import=(),
             import_=AST.ReferenceImport(
                 module=AST.Module.snippet(
-                    module_path=self.get_module_path_for_declared_type_name(
-                        name=name,
-                    ),
+                    module_path=self.get_module_path_for_declared_type_name(name=name, as_request=as_request),
                 ),
-                named_import=name.name.pascal_case.unsafe_name,
+                named_import=name.name.pascal_case.safe_name,
             ),
         )
 
     def get_module_path_for_declared_type_name(
         self,
         name: ir_types.DeclaredTypeName,
+        as_request: bool,
     ) -> AST.ModulePath:
-        module_path = tuple([directory.snake_case.unsafe_name for directory in name.fern_filepath.package_path])
-        if len(module_path) > 0:
-            # If the type is defined in a subpackge, it needs to be imported with the 'resources'
-            # intermediary key. Otherwise the types can be imported from the root package.
-            module_path = ("resources",) + module_path
+        modules = self._context.type_declaration_referencer.get_filepath(name=name, as_request=as_request).directories
+        # Since this is the full file path, we want to not include the actual file name and stop at the last module
+        module_path = tuple([directory.module_name for directory in modules[:-1]])
+
         return self._context.get_module_path_in_project(
             module_path,
         )
@@ -63,6 +64,9 @@ class SnippetWriter:
     def get_snippet_for_example_type_reference(
         self,
         example_type_reference: ir_types.ExampleTypeReference,
+        use_typeddict_request: bool,
+        as_request: bool,
+        in_typeddict: bool = False,
     ) -> Optional[AST.Expression]:
         return example_type_reference.shape.visit(
             primitive=lambda primitive: self._get_snippet_for_primitive(
@@ -70,6 +74,9 @@ class SnippetWriter:
             ),
             container=lambda container: self._get_snippet_for_container(
                 container=container,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
+                in_typeddict=in_typeddict,
             ),
             unknown=lambda unknown: self._get_snippet_for_unknown(
                 unknown=unknown,
@@ -83,6 +90,10 @@ class SnippetWriter:
     def get_snippet_for_object_properties(
         self,
         example: ir_types.ExampleObjectType,
+        request_parameter_names: Dict[ir_types.Name, str],
+        in_typeddict: bool,
+        use_typeddict_request: bool,
+        as_request: bool,
     ) -> List[AST.Expression]:
         args: List[AST.Expression] = []
         for property in example.properties:
@@ -92,6 +103,9 @@ class SnippetWriter:
                 ),
                 container=lambda container: self._get_snippet_for_container(
                     container=container,
+                    use_typeddict_request=use_typeddict_request,
+                    as_request=as_request,
+                    in_typeddict=in_typeddict,
                 ),
                 unknown=lambda unknown: self._get_snippet_for_unknown(
                     unknown=unknown,
@@ -102,9 +116,17 @@ class SnippetWriter:
                 ),
             )
             if value is not None:
+                # TODO: we really need to centralize a lot of this logic,
+                # especially around renaming and models in general
+                maybe_rewritten_name = (
+                    request_parameter_names.get(property.name.name) or property.name.name.snake_case.safe_name
+                )
+                if maybe_rewritten_name.startswith("_"):
+                    maybe_rewritten_name = "f_" + maybe_rewritten_name.lstrip("_")
+
                 args.append(
                     self.get_snippet_for_named_parameter(
-                        parameter_name=property.name.name.snake_case.safe_name,
+                        parameter_name=maybe_rewritten_name,
                         value=value,
                     ),
                 )
@@ -130,7 +152,7 @@ class SnippetWriter:
             double=lambda double: AST.Expression(str(double)),
             string=lambda string: self._get_snippet_for_string_primitive(string),
             boolean=lambda boolean: AST.Expression(str(boolean)),
-            long=lambda long: AST.Expression(str(long)),
+            long_=lambda long: AST.Expression(str(long)),
             datetime=lambda datetime: AST.Expression(
                 AST.FunctionInvocation(
                     function_definition=AST.ClassReference(
@@ -163,7 +185,7 @@ class SnippetWriter:
                     args=[AST.Expression(f'"{str(date)}"')],
                 ),
             ),
-            uuid=lambda uuid: AST.Expression(
+            uuid_=lambda uuid: AST.Expression(
                 AST.FunctionInvocation(
                     function_definition=AST.ClassReference(
                         import_=AST.ReferenceImport(
@@ -176,6 +198,11 @@ class SnippetWriter:
                     args=[AST.Expression(f'"{str(uuid)}"')],
                 ),
             ),
+            uint=lambda uint: AST.Expression(str(uint)),
+            uint_64=lambda uint_64: AST.Expression(str(uint_64)),
+            float_=lambda float_: AST.Expression(str(float_)),
+            base_64=lambda base_64: AST.Expression(str(base_64)),
+            big_integer=lambda big_integer: AST.Expression(str(big_integer)),
         )
 
     def _get_snippet_for_string_primitive(
@@ -183,36 +210,45 @@ class SnippetWriter:
         escaped_string: ir_types.EscapedString,
     ) -> AST.Expression:
         string = escaped_string.original
-        if '"' in string:
-            # There are literal quotes in the given string.
-            # We want to preserve the format and instead surround
-            # the string in single quotes.
-            #
-            # This is especially relevant for JSON examples
-            # specified as a string (e.g. '{"foo": "bar"}').
-            clean = string.replace("'", '"')
-            return AST.Expression(f"'{clean}'")
-        return AST.Expression(f'"{string}"')
+        return AST.Expression(repr(string))
 
     def _get_snippet_for_container(
         self,
         container: ir_types.ExampleContainer,
+        in_typeddict: bool,
+        use_typeddict_request: bool,
+        as_request: bool,
     ) -> Optional[AST.Expression]:
         return container.visit(
-            list=lambda list: self._get_snippet_for_list_or_set(
-                example_type_references=list,
+            list_=lambda list: self._get_snippet_for_list_or_set(
+                example_type_references=list.list_,
+                is_list=True,
+                in_typeddict=in_typeddict,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
             ),
-            set=lambda set: self._get_snippet_for_list_or_set(
-                example_type_references=set,
+            set_=lambda set: self._get_snippet_for_list_or_set(
+                example_type_references=set.set_,
+                is_list=False,
+                in_typeddict=in_typeddict,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
             ),
             optional=lambda optional: self.get_snippet_for_example_type_reference(
-                example_type_reference=optional,
+                example_type_reference=optional.optional,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
+                in_typeddict=in_typeddict,
             )
-            if optional is not None
+            if optional.optional is not None
             else None,
-            map=lambda map: self._get_snippet_for_map(
-                pairs=map,
+            map_=lambda map: self._get_snippet_for_map(
+                pairs=map.map_,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
+                in_typeddict=in_typeddict,
             ),
+            literal=lambda lit: self._get_snippet_for_primitive(lit.literal) if in_typeddict else None,
         )
 
     def _get_snippet_for_unknown(
@@ -224,28 +260,54 @@ class SnippetWriter:
     def _get_snippet_for_list_or_set(
         self,
         example_type_references: List[ir_types.ExampleTypeReference],
+        is_list: bool,
+        in_typeddict: bool,
+        use_typeddict_request: bool,
+        as_request: bool,
     ) -> Optional[AST.Expression]:
         values: List[AST.Expression] = []
+        # We use lists for sets if the inner type is non-primitive because Pydantic models aren't hashable
+        contents_are_primitive = False
         for example_type_reference in example_type_references:
+            contents_are_primitive = example_type_reference.shape.visit(
+                primitive=lambda _: True,
+                container=lambda _: False,
+                unknown=lambda _: False,
+                named=lambda _: False,
+            )
             expression = self.get_snippet_for_example_type_reference(
                 example_type_reference=example_type_reference,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
+                in_typeddict=in_typeddict,
             )
             if expression is not None:
                 values.append(expression)
-        return self._write_list(values=values)
+        return (
+            self._write_list(values=values) if is_list or not contents_are_primitive else self._write_set(values=values)
+        )
 
     def _get_snippet_for_map(
         self,
         pairs: List[ir_types.ExampleKeyValuePair],
-    ) -> Optional[AST.Expression]:
+        in_typeddict: bool,
+        use_typeddict_request: bool,
+        as_request: bool,
+    ) -> AST.Expression:
         keys: List[AST.Expression] = []
         values: List[AST.Expression] = []
         for pair in pairs:
             key = self.get_snippet_for_example_type_reference(
                 example_type_reference=pair.key,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
+                in_typeddict=in_typeddict,
             )
             value = self.get_snippet_for_example_type_reference(
                 example_type_reference=pair.value,
+                use_typeddict_request=use_typeddict_request,
+                as_request=as_request,
+                in_typeddict=in_typeddict,
             )
             if key is not None and value is not None:
                 keys.append(key)
@@ -263,6 +325,20 @@ class SnippetWriter:
                     writer.write(", ")
                 writer.write_node(value)
             writer.write("]")
+
+        return AST.Expression(AST.CodeWriter(write_list))
+
+    def _write_set(
+        self,
+        values: List[AST.Expression],
+    ) -> AST.Expression:
+        def write_list(writer: AST.NodeWriter) -> None:
+            writer.write("{")
+            for i, value in enumerate(values):
+                if i > 0:
+                    writer.write(", ")
+                writer.write_node(value)
+            writer.write("}")
 
         return AST.Expression(AST.CodeWriter(write_list))
 

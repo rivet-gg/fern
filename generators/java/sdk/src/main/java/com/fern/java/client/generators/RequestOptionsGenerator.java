@@ -20,6 +20,7 @@ import com.fern.ir.model.auth.AuthScheme;
 import com.fern.ir.model.auth.BasicAuthScheme;
 import com.fern.ir.model.auth.BearerAuthScheme;
 import com.fern.ir.model.auth.HeaderAuthScheme;
+import com.fern.ir.model.auth.OAuthScheme;
 import com.fern.ir.model.commons.NameAndWireValue;
 import com.fern.ir.model.http.HttpHeader;
 import com.fern.java.AbstractGeneratorContext;
@@ -32,6 +33,7 @@ import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
+import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.lang.model.element.Modifier;
 
@@ -81,7 +84,7 @@ public final class RequestOptionsGenerator extends AbstractFileGenerator {
         AuthSchemeHandler authSchemeHandler =
                 new AuthSchemeHandler(requestOptionsTypeSpec, builderTypeSpec, getHeadersCodeBlock, headerHandler);
         List<RequestOption> fields = new ArrayList<>();
-        for (AuthScheme authScheme : generatorContext.getIr().getAuth().getSchemes()) {
+        for (AuthScheme authScheme : generatorContext.getResolvedAuthSchemes()) {
             RequestOption fieldAndMethods = authScheme.visit(authSchemeHandler);
             // TODO(dsinghvi): Support basic auth and remove null check
             if (fieldAndMethods != null) {
@@ -100,6 +103,50 @@ public final class RequestOptionsGenerator extends AbstractFileGenerator {
             fields.add(headerHandler.visitHeader(httpHeader));
         }
 
+        FieldSpec.Builder timeoutFieldBuilder = FieldSpec.builder(
+                ParameterizedTypeName.get(ClassName.get(Optional.class), TypeName.get(Integer.class)),
+                "timeout",
+                Modifier.PRIVATE);
+
+        FieldSpec.Builder timeoutTimeUnitFieldBuilder =
+                FieldSpec.builder(ParameterizedTypeName.get(TimeUnit.class), "timeoutTimeUnit", Modifier.PRIVATE);
+
+        // Add in the other (static) fields for request options
+        createRequestOptionField(
+                "getTimeout",
+                timeoutFieldBuilder,
+                CodeBlock.of("$T.empty()", Optional.class),
+                requestOptionsTypeSpec,
+                builderTypeSpec,
+                fields);
+        createRequestOptionField(
+                "getTimeoutTimeUnit",
+                timeoutTimeUnitFieldBuilder,
+                CodeBlock.of("$T.SECONDS", TimeUnit.class),
+                requestOptionsTypeSpec,
+                builderTypeSpec,
+                fields);
+
+        FieldSpec timeoutField = timeoutFieldBuilder.build();
+        FieldSpec timeUnitField = timeoutTimeUnitFieldBuilder.build();
+        builderTypeSpec.addMethod(MethodSpec.methodBuilder(timeoutField.name)
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(Integer.class, timeoutField.name)
+                .addStatement("this.$L = Optional.of($L)", timeoutField.name, timeoutField.name)
+                .addStatement("return this")
+                .returns(builderClassName)
+                .build());
+
+        builderTypeSpec.addMethod(MethodSpec.methodBuilder(timeoutField.name)
+                .addModifiers(Modifier.PUBLIC)
+                .addParameter(Integer.class, timeoutField.name)
+                .addParameter(timeUnitField.type, timeUnitField.name)
+                .addStatement("this.$L = Optional.of($L)", timeoutField.name, timeoutField.name)
+                .addStatement("this.$L = $L", timeUnitField.name, timeUnitField.name)
+                .addStatement("return this")
+                .returns(builderClassName)
+                .build());
+
         String constructorArgs =
                 fields.stream().map(field -> field.builderField.name).collect(Collectors.joining(", "));
         builderTypeSpec.addMethod(MethodSpec.methodBuilder("build")
@@ -111,8 +158,7 @@ public final class RequestOptionsGenerator extends AbstractFileGenerator {
         MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PRIVATE)
                 .addParameters(fields.stream()
-                        .map(authSchemeFields -> ParameterSpec.builder(
-                                        authSchemeFields.builderField.type, authSchemeFields.builderField.name)
+                        .map(field -> ParameterSpec.builder(field.builderField.type, field.builderField.name)
                                 .build())
                         .collect(Collectors.toList()));
         for (RequestOption requestOption : fields) {
@@ -139,6 +185,29 @@ public final class RequestOptionsGenerator extends AbstractFileGenerator {
                 .className(className)
                 .javaFile(requestOptionsFile)
                 .build();
+    }
+
+    private void createRequestOptionField(
+            String getterFunctionName,
+            FieldSpec.Builder fieldSpecBuilder,
+            CodeBlock initializer,
+            TypeSpec.Builder requestOptionsTypeSpec,
+            TypeSpec.Builder builderTypeSpec,
+            List<RequestOption> fields) {
+        FieldSpec field = fieldSpecBuilder.build();
+        requestOptionsTypeSpec.addField(
+                fieldSpecBuilder.addModifiers(Modifier.FINAL).build());
+        fields.add(new RequestOption(fieldSpecBuilder.initializer(initializer).build(), field));
+        FieldSpec builderField = FieldSpec.builder(field.type, field.name, Modifier.PRIVATE)
+                .initializer(initializer)
+                .build();
+        builderTypeSpec.addField(builderField);
+
+        requestOptionsTypeSpec.addMethod(MethodSpec.methodBuilder(getterFunctionName)
+                .addModifiers(Modifier.PUBLIC)
+                .addStatement("return $N", field.name)
+                .returns(field.type)
+                .build());
     }
 
     private static class RequestOption {
@@ -216,6 +285,11 @@ public final class RequestOptionsGenerator extends AbstractFileGenerator {
         @Override
         public RequestOption visitHeader(HeaderAuthScheme header) {
             return headerHandler.visitAuthScheme(header);
+        }
+
+        @Override
+        public RequestOption visitOauth(OAuthScheme oauth) {
+            return null;
         }
 
         @Override

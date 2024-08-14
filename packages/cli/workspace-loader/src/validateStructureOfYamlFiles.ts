@@ -1,6 +1,6 @@
+import { FERN_PACKAGE_MARKER_FILENAME, ROOT_API_FILENAME } from "@fern-api/configuration";
 import { entries } from "@fern-api/core-utils";
 import { AbsoluteFilePath, join, RelativeFilePath } from "@fern-api/fs-utils";
-import { FERN_PACKAGE_MARKER_FILENAME, ROOT_API_FILENAME } from "@fern-api/project-configuration";
 import { DefinitionFileSchema, PackageMarkerFileSchema, RootApiFileSchema } from "@fern-api/yaml-schema";
 import path from "path";
 import { ZodError } from "zod";
@@ -57,6 +57,7 @@ export function validateStructureOfYamlFiles({
             const maybeValidFileContents = RootApiFileSchema.safeParse(parsedFileContents);
             if (maybeValidFileContents.success) {
                 rootApiFile = {
+                    defaultUrl: maybeValidFileContents.data["default-url"],
                     contents: maybeValidFileContents.data,
                     rawContents: file.rawContents
                 };
@@ -67,6 +68,10 @@ export function validateStructureOfYamlFiles({
             const maybeValidFileContents = PackageMarkerFileSchema.safeParse(parsedFileContents);
             if (maybeValidFileContents.success) {
                 packageMarkers[relativeFilepath] = {
+                    defaultUrl:
+                        typeof maybeValidFileContents.data.export === "object"
+                            ? maybeValidFileContents.data.export.url
+                            : undefined,
                     contents: maybeValidFileContents.data,
                     rawContents: file.rawContents
                 };
@@ -77,6 +82,7 @@ export function validateStructureOfYamlFiles({
             const maybeValidFileContents = DefinitionFileSchema.safeParse(parsedFileContents);
             if (maybeValidFileContents.success) {
                 namesDefinitionFiles[relativeFilepath] = {
+                    defaultUrl: undefined,
                     contents: maybeValidFileContents.data,
                     rawContents: file.rawContents,
                     absoluteFilepath: join(absolutePathToDefinition, relativeFilepath)

@@ -12,13 +12,18 @@ export declare namespace SeedIdempotencyHeadersClient {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class SeedIdempotencyHeadersClient {
-    constructor(protected readonly _options: SeedIdempotencyHeadersClient.Options) {}
+    constructor(protected readonly _options: SeedIdempotencyHeadersClient.Options) {
+    }
 
     protected _payment: Payment | undefined;
 

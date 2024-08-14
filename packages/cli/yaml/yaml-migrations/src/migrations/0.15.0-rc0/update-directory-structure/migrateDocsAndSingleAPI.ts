@@ -1,15 +1,12 @@
+import { docsYml } from "@fern-api/configuration";
 import { AbsoluteFilePath, moveFolder } from "@fern-api/fs-utils";
 import { rm, writeFile } from "fs/promises";
 import yaml from "js-yaml";
-import {
-    DocsURL,
-    getAbsolutePathToDocsFolder,
-    getAbsolutePathToDocsYaml,
-    loadRawDocsConfiguration
-} from "./docs-config";
+import { getAbsolutePathToDocsFolder, getAbsolutePathToDocsYaml, loadRawDocsConfiguration } from "./docs-config";
 import { convertLegacyDocsConfig } from "./docs-config/convertLegacyDocsConfig";
 import { getAbsolutePathToGeneratorsConfiguration, loadRawGeneratorsConfiguration } from "./generators-configuration";
 import { convertLegacyGeneratorsConfiguration } from "./generators-configuration/convertLegacyGeneratorsConfiguration";
+import { migrateDocsInstances } from "./migrateDocsInstances";
 
 /**
  * fern/  <------ path to fern directory
@@ -44,7 +41,7 @@ async function migrateAndWriteDocsYml({
     docsURLs
 }: {
     absolutePathToWorkspace: AbsoluteFilePath;
-    docsURLs: DocsURL[];
+    docsURLs: docsYml.RawSchemas.DocsInstance[];
 }): Promise<void> {
     const docsConfiguration = await loadRawDocsConfiguration({ absolutePathToWorkspace });
     if (docsConfiguration == null) {
@@ -52,7 +49,7 @@ async function migrateAndWriteDocsYml({
     }
     const convertedDocsConfig = convertLegacyDocsConfig({
         docsConfiguration,
-        docsURLs,
+        docsURLs: migrateDocsInstances(docsURLs),
         apiName: undefined
     });
     const absolutePathToDocsConfig = getAbsolutePathToDocsYaml({ absolutePathToWorkspace });
@@ -63,7 +60,7 @@ async function migrateAndWriteGeneratorsYml({
     absolutePathToWorkspace
 }: {
     absolutePathToWorkspace: AbsoluteFilePath;
-}): Promise<DocsURL[]> {
+}): Promise<docsYml.RawSchemas.DocsInstance[]> {
     const generatorsConfiguration = await loadRawGeneratorsConfiguration({ absolutePathToWorkspace });
     if (generatorsConfiguration == null) {
         return [];

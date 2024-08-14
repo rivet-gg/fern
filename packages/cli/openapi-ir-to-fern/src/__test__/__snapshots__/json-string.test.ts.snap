@@ -1,5 +1,37 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`json-string json-string docs 1`] = `
+{
+  "definitionFiles": {},
+  "packageMarkerFile": {
+    "types": {
+      "User": {
+        "docs": undefined,
+        "properties": {
+          "id": {
+            "type": "optional<string>",
+            "validation": {
+              "format": "uuid",
+              "maxLength": undefined,
+              "minLength": undefined,
+              "pattern": undefined,
+            },
+          },
+          "metadata": "optional<unknown>",
+        },
+      },
+    },
+  },
+  "rootApiFile": {
+    "display-name": "Test \`json-string\` example",
+    "error-discrimination": {
+      "strategy": "status-code",
+    },
+    "name": "api",
+  },
+}
+`;
+
 exports[`json-string json-string simple 1`] = `
 {
   "definitionFiles": {},
@@ -8,7 +40,15 @@ exports[`json-string json-string simple 1`] = `
       "User": {
         "docs": undefined,
         "properties": {
-          "id": "optional<string>",
+          "id": {
+            "type": "optional<string>",
+            "validation": {
+              "format": "uuid",
+              "maxLength": undefined,
+              "minLength": undefined,
+              "pattern": undefined,
+            },
+          },
           "metadata": "optional<unknown>",
         },
       },

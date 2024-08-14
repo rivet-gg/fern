@@ -1,14 +1,8 @@
+import { FERN_PACKAGE_MARKER_FILENAME } from "@fern-api/configuration";
+import { assertNever, MediaType } from "@fern-api/core-utils";
 import { RelativeFilePath } from "@fern-api/fs-utils";
+import { Endpoint, EndpointExample, Request, Schema, SchemaId } from "@fern-api/openapi-ir-sdk";
 import { RawSchemas } from "@fern-api/yaml-schema";
-import { SchemaId } from "@fern-fern/openapi-ir-model/commons";
-import {
-    Endpoint,
-    EndpointAvailability,
-    EndpointExample,
-    Request,
-    Response,
-    Schema
-} from "@fern-fern/openapi-ir-model/finalIr";
 import { buildEndpointExample } from "./buildEndpointExample";
 import { ERROR_DECLARATIONS_FILENAME, EXTERNAL_AUDIENCE } from "./buildFernDefinition";
 import { buildHeader } from "./buildHeader";
@@ -16,6 +10,8 @@ import { buildPathParameter } from "./buildPathParameter";
 import { buildQueryParameter } from "./buildQueryParameter";
 import { buildTypeReference } from "./buildTypeReference";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { convertAvailability } from "./utils/convertAvailability";
+import { convertFullExample } from "./utils/convertFullExample";
 import { convertToHttpMethod } from "./utils/convertToHttpMethod";
 import { getDocsFromTypeReference, getTypeFromTypeReference } from "./utils/getTypeFromTypeReference";
 
@@ -33,7 +29,7 @@ export function buildEndpoint({
     declarationFile: RelativeFilePath;
     endpoint: Endpoint;
 }): ConvertedEndpoint {
-    const { errors, nonRequestReferencedSchemas } = context.ir;
+    const { nonRequestReferencedSchemas } = context.ir;
 
     let schemaIdsToExclude: string[] = [];
 
@@ -64,11 +60,29 @@ export function buildEndpoint({
         names.add(queryParameter.name);
     }
 
+    let pagination: RawSchemas.PaginationSchema | undefined = undefined;
+    if (endpoint.pagination != null) {
+        if (endpoint.pagination.type === "cursor") {
+            pagination = {
+                cursor: endpoint.pagination.cursor,
+                next_cursor: endpoint.pagination.nextCursor,
+                results: endpoint.pagination.results
+            };
+        } else {
+            pagination = {
+                offset: endpoint.pagination.offset,
+                step: endpoint.pagination.step,
+                results: endpoint.pagination.results
+            };
+        }
+    }
+
     const convertedEndpoint: RawSchemas.HttpEndpointSchema = {
         path: endpoint.path,
         method: convertToHttpMethod(endpoint.method),
         auth: endpoint.authed,
-        docs: endpoint.description ?? undefined
+        docs: endpoint.description ?? undefined,
+        pagination
     };
 
     if (Object.keys(pathParameters).length > 0) {
@@ -98,7 +112,7 @@ export function buildEndpoint({
             generatedRequestName: endpoint.generatedRequestName,
             requestNameOverride: endpoint.requestNameOverride ?? undefined,
             queryParameters: Object.keys(queryParameters).length > 0 ? queryParameters : undefined,
-            nonRequestReferencedSchemas,
+            nonRequestReferencedSchemas: Array.from(nonRequestReferencedSchemas),
             headers: Object.keys(headers).length > 0 ? headers : undefined,
             usedNames: names
         });
@@ -126,7 +140,7 @@ export function buildEndpoint({
     }
 
     if (endpoint.response != null) {
-        Response._visit(endpoint.response, {
+        endpoint.response._visit({
             json: (jsonResponse) => {
                 const responseTypeReference = buildTypeReference({
                     schema: jsonResponse.schema,
@@ -149,7 +163,20 @@ export function buildEndpoint({
                 });
                 convertedEndpoint["response-stream"] = {
                     docs: jsonResponse.description ?? undefined,
-                    type: getTypeFromTypeReference(responseTypeReference)
+                    type: getTypeFromTypeReference(responseTypeReference),
+                    format: "json"
+                };
+            },
+            streamingSse: (jsonResponse) => {
+                const responseTypeReference = buildTypeReference({
+                    schema: jsonResponse.schema,
+                    context,
+                    fileContainingReference: declarationFile
+                });
+                convertedEndpoint["response-stream"] = {
+                    docs: jsonResponse.description ?? undefined,
+                    type: getTypeFromTypeReference(responseTypeReference),
+                    format: "sse"
                 };
             },
             file: (fileResponse) => {
@@ -170,7 +197,7 @@ export function buildEndpoint({
                     type: "text"
                 };
             },
-            _unknown: () => {
+            _other: () => {
                 throw new Error("Unrecognized Response type: " + endpoint.response?.type);
             }
         });
@@ -185,25 +212,71 @@ export function buildEndpoint({
         }
     }
 
-    if (endpoint.availability === EndpointAvailability.Beta) {
-        convertedEndpoint.availability = "pre-release";
-    } else if (endpoint.availability === EndpointAvailability.GenerallyAvailable) {
-        convertedEndpoint.availability = "generally-available";
-    } else if (endpoint.availability === EndpointAvailability.Deprecated) {
-        convertedEndpoint.availability = "deprecated";
+    if (endpoint.idempotent) {
+        convertedEndpoint.idempotent = true;
     }
 
-    endpoint.errorStatusCode.forEach((statusCode) => {
-        const errorName = errors[statusCode]?.generatedName;
-        if (errorName != null) {
-            if (convertedEndpoint.errors == null) {
-                convertedEndpoint.errors = [];
+    if (endpoint.availability != null) {
+        convertedEndpoint.availability = convertAvailability(endpoint.availability);
+    }
+
+    Object.entries(endpoint.errors).forEach(([statusCode, httpError]) => {
+        let errorName = httpError.generatedName;
+        const fileContainingReference = RelativeFilePath.of(FERN_PACKAGE_MARKER_FILENAME);
+        if (context.builder.enableUniqueErrorsPerEndpoint) {
+            errorName = `${endpoint.generatedRequestName}${httpError.generatedName}`;
+            if (httpError.schema != null) {
+                if (httpError.schema.type !== "reference" && httpError.schema.type !== "oneOf") {
+                    httpError.schema.generatedName = `${endpoint.generatedRequestName}${httpError.schema.generatedName}`;
+                } else if (httpError.schema.type === "oneOf") {
+                    httpError.schema.value.generatedName = `${endpoint.generatedRequestName}${httpError.schema.value.generatedName}`;
+                }
             }
-            const prefix = context.builder.addImport({
-                file: declarationFile,
-                fileToImport: ERROR_DECLARATIONS_FILENAME
+            // fileContainingReference = declarationFile;
+        }
+
+        const errorDeclaration: RawSchemas.ErrorDeclarationSchema = {
+            "status-code": parseInt(statusCode)
+        };
+
+        if (httpError.schema != null) {
+            const typeReference = buildTypeReference({
+                schema: httpError.schema,
+                context,
+                fileContainingReference
             });
-            convertedEndpoint.errors.push(prefix != null ? `${prefix}.${errorName}` : errorName);
+            errorDeclaration.type = getTypeFromTypeReference(typeReference);
+            errorDeclaration.docs = httpError.description;
+        }
+
+        context.builder.addError(ERROR_DECLARATIONS_FILENAME, {
+            name: errorName,
+            schema: errorDeclaration
+        });
+
+        if (convertedEndpoint.errors == null) {
+            convertedEndpoint.errors = [];
+        }
+        const prefix = context.builder.addImport({
+            file: declarationFile,
+            fileToImport: ERROR_DECLARATIONS_FILENAME
+        });
+        convertedEndpoint.errors.push(prefix != null ? `${prefix}.${errorName}` : errorName);
+
+        const errorTypeReference = errorDeclaration.type;
+        if (errorTypeReference != null) {
+            httpError.examples?.forEach((example) => {
+                const convertedExample: RawSchemas.ExampleTypeSchema = {
+                    value: convertFullExample(example.example),
+                    name: example.name,
+                    docs: example.description
+                };
+
+                context.builder.addErrorExample(ERROR_DECLARATIONS_FILENAME, {
+                    name: errorName,
+                    example: convertedExample
+                });
+            });
         }
     });
 
@@ -278,7 +351,7 @@ function getRequest({
         // the request body is referenced if it is not an object or if other parts of the spec
         // refer to the same type
         if (
-            resolvedSchema.type !== "object" ||
+            resolvedSchema?.type !== "object" ||
             (maybeSchemaId != null && nonRequestReferencedSchemas.includes(maybeSchemaId))
         ) {
             const requestTypeReference = buildTypeReference({
@@ -320,8 +393,33 @@ function getRequest({
                     context
                 });
 
-                if (!usedNames.has(property.key) && property.audiences.length <= 0) {
-                    return [property.key, propertyTypeReference];
+                // TODO: clean up conditional logic
+                const name = property.nameOverride ?? property.key;
+                const availability = convertAvailability(property.availability);
+                if (!usedNames.has(name) && property.audiences.length <= 0) {
+                    usedNames.add(name);
+                    if (property.nameOverride != null) {
+                        return [
+                            property.key,
+                            {
+                                type: getTypeFromTypeReference(propertyTypeReference),
+                                docs: getDocsFromTypeReference(propertyTypeReference),
+                                name: property.nameOverride,
+                                availability
+                            }
+                        ];
+                    }
+                    return [
+                        property.key,
+                        availability
+                            ? {
+                                  ...(typeof propertyTypeReference === "string"
+                                      ? { type: propertyTypeReference }
+                                      : propertyTypeReference),
+                                  availability
+                              }
+                            : propertyTypeReference
+                    ];
                 }
 
                 const typeReference: RawSchemas.ObjectPropertySchema = {
@@ -329,7 +427,7 @@ function getRequest({
                     docs: getDocsFromTypeReference(propertyTypeReference)
                 };
 
-                if (usedNames.has(property.key)) {
+                if (usedNames.has(name)) {
                     typeReference.name = property.generatedName;
                 }
 
@@ -337,6 +435,11 @@ function getRequest({
                     typeReference.audiences = property.audiences;
                 }
 
+                if (availability != null) {
+                    typeReference.availability = availability;
+                }
+
+                usedNames.add(name);
                 return [property.key, typeReference];
             })
         );
@@ -353,6 +456,9 @@ function getRequest({
         };
         if (extendedSchemas.length > 0) {
             requestBodySchema.extends = extendedSchemas;
+        }
+        if (request.additionalProperties) {
+            requestBodySchema["extra-properties"] = true;
         }
 
         const convertedRequestValue: RawSchemas.HttpRequestSchema = {
@@ -373,18 +479,19 @@ function getRequest({
             schemaIdsToExclude: [],
             value: {
                 body: "bytes",
-                "content-type": "application/octet-stream"
+                "content-type": MediaType.APPLICATION_OCTET_STREAM
             }
         };
-    } else {
+    } else if (request.type === "multipart") {
         // multipart
         const properties = Object.fromEntries(
             request.properties.map((property) => {
                 if (property.schema.type === "file") {
-                    return [property.key, "file"];
+                    const fileType = property.schema.isArray ? "list<file>" : "file";
+                    return [property.key, property.schema.isOptional ? `optional<${fileType}>` : fileType];
                 } else {
                     const propertyTypeReference = buildTypeReference({
-                        schema: property.schema.json,
+                        schema: property.schema.value,
                         fileContainingReference: declarationFile,
                         context
                     });
@@ -400,8 +507,11 @@ function getRequest({
                 headers,
                 body: {
                     properties
-                }
+                },
+                "content-type": MediaType.MULTIPART_FORM_DATA
             }
         };
+    } else {
+        assertNever(request);
     }
 }

@@ -10,6 +10,8 @@ export const IntermediateRepresentation: core.serialization.ObjectSchema<
     serializers.IntermediateRepresentation.Raw,
     FernIr.IntermediateRepresentation
 > = core.serialization.objectWithoutOptionalProperties({
+    fdrApiDefinitionId: core.serialization.string().optional(),
+    apiVersion: core.serialization.lazy(async () => (await import("../../..")).ApiVersionScheme).optional(),
     apiName: core.serialization.lazyObject(async () => (await import("../../..")).Name),
     apiDisplayName: core.serialization.string().optional(),
     apiDocs: core.serialization.string().optional(),
@@ -30,6 +32,12 @@ export const IntermediateRepresentation: core.serialization.ObjectSchema<
         core.serialization.lazy(async () => (await import("../../..")).WebhookGroupId),
         core.serialization.lazy(async () => (await import("../../..")).WebhookGroup)
     ),
+    websocketChannels: core.serialization
+        .record(
+            core.serialization.lazy(async () => (await import("../../..")).WebSocketChannelId),
+            core.serialization.lazyObject(async () => (await import("../../..")).WebSocketChannel)
+        )
+        .optional(),
     errors: core.serialization.record(
         core.serialization.lazy(async () => (await import("../../..")).ErrorId),
         core.serialization.lazyObject(async () => (await import("../../..")).ErrorDeclaration)
@@ -55,10 +63,13 @@ export const IntermediateRepresentation: core.serialization.ObjectSchema<
     serviceTypeReferenceInfo: core.serialization.lazyObject(
         async () => (await import("../../..")).ServiceTypeReferenceInfo
     ),
+    readmeConfig: core.serialization.lazyObject(async () => (await import("../../..")).ReadmeConfig).optional(),
 });
 
 export declare namespace IntermediateRepresentation {
     interface Raw {
+        fdrApiDefinitionId?: string | null;
+        apiVersion?: serializers.ApiVersionScheme.Raw | null;
         apiName: serializers.Name.Raw;
         apiDisplayName?: string | null;
         apiDocs?: string | null;
@@ -68,6 +79,7 @@ export declare namespace IntermediateRepresentation {
         types: Record<serializers.TypeId.Raw, serializers.TypeDeclaration.Raw>;
         services: Record<serializers.ServiceId.Raw, serializers.HttpService.Raw>;
         webhookGroups: Record<serializers.WebhookGroupId.Raw, serializers.WebhookGroup.Raw>;
+        websocketChannels?: Record<serializers.WebSocketChannelId.Raw, serializers.WebSocketChannel.Raw> | null;
         errors: Record<serializers.ErrorId.Raw, serializers.ErrorDeclaration.Raw>;
         subpackages: Record<serializers.SubpackageId.Raw, serializers.Subpackage.Raw>;
         rootPackage: serializers.Package.Raw;
@@ -79,5 +91,6 @@ export declare namespace IntermediateRepresentation {
         sdkConfig: serializers.SdkConfig.Raw;
         variables: serializers.VariableDeclaration.Raw[];
         serviceTypeReferenceInfo: serializers.ServiceTypeReferenceInfo.Raw;
+        readmeConfig?: serializers.ReadmeConfig.Raw | null;
     }
 }

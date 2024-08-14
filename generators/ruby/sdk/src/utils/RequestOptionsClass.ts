@@ -17,6 +17,9 @@ import { HeadersGenerator } from "./HeadersGenerator";
 export declare namespace RequestOptions {
     export interface Init {
         headersGenerator: HeadersGenerator;
+        nameOverride?: string;
+        additionalProperties?: Property[];
+        clientName: string;
     }
 }
 
@@ -26,8 +29,9 @@ export class RequestOptions extends Class_ {
     public additionalHeaderProperty: Property;
     public additionalQueryProperty: Property;
     public additionalBodyProperty: Property;
+    public baseUrlProperty: Property;
 
-    constructor({ headersGenerator }: RequestOptions.Init) {
+    constructor({ nameOverride, headersGenerator, additionalProperties, clientName }: RequestOptions.Init) {
         const timeoutProperty = new Property({
             name: "timeout_in_seconds",
             type: LongClassReference,
@@ -55,16 +59,27 @@ export class RequestOptions extends Class_ {
             type: new HashReference({ keyType: StringClassReference, valueType: GenericClassReference }),
             isOptional: true
         });
+        const baseUrlProperty = new Property({
+            name: "base_url",
+            type: StringClassReference,
+            isOptional: true
+        });
 
         super({
-            classReference: new ClassReference({ name: "RequestOptions", location: "requests" }),
+            classReference: new ClassReference({
+                name: nameOverride ?? "RequestOptions",
+                location: "requests",
+                moduleBreadcrumbs: [clientName]
+            }),
             includeInitializer: true,
             properties: [
+                baseUrlProperty,
                 ...headerProperties,
                 additionalHeaderProperty,
                 additionalQueryProperty,
                 additionalBodyProperty,
-                timeoutProperty
+                timeoutProperty,
+                ...(additionalProperties ?? [])
             ],
             documentation: "Additional options for request-specific configuration when calling APIs via the SDK."
         });
@@ -74,6 +89,7 @@ export class RequestOptions extends Class_ {
         this.additionalHeaderProperty = additionalHeaderProperty;
         this.additionalQueryProperty = additionalQueryProperty;
         this.additionalBodyProperty = additionalBodyProperty;
+        this.baseUrlProperty = baseUrlProperty;
     }
 
     // These functions all essentially check if parameters are nil, and if not then add them to the overrides
@@ -115,5 +131,9 @@ export class RequestOptions extends Class_ {
     // Just add to the map and compact it
     public getAdditionalBodyProperties(requestOptionsVariable: Variable): string {
         return `${requestOptionsVariable.write({})}&.${this.additionalBodyProperty.name}`;
+    }
+
+    public getBaseUrlProperty(requestOptionsVariable: Variable): string {
+        return `${requestOptionsVariable.write({})}&.${this.baseUrlProperty.name}`;
     }
 }

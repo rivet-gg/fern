@@ -5,6 +5,7 @@ import { OptionalKind, ParameterDeclarationStructure, ts } from "ts-morph";
 
 export interface RequestParameter {
     getInitialStatements: (context: SdkContext, args: { variablesInScope: string[] }) => ts.Statement[];
+    getType(context: SdkContext): ts.TypeNode;
     getParameterDeclaration: (context: SdkContext) => OptionalKind<ParameterDeclarationStructure>;
     getReferenceToRequestBody: (context: SdkContext) => ts.Expression | undefined;
     getReferenceToQueryParameter: (queryParameterKey: string, context: SdkContext) => ts.Expression;
@@ -25,4 +26,5 @@ export interface RequestParameter {
         example: ExampleEndpointCall;
         opts: GetReferenceOpts;
     }): ts.Expression | undefined;
+    isOptional({ context }: { context: SdkContext }): boolean;
 }

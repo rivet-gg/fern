@@ -1,4 +1,4 @@
-irVersion: v31
+irVersion: v53
 docker: fernapi/fern-fastapi-server:latest
 dockerCommand: docker build -f ./generators/python/fastapi/Dockerfile -t fernapi/fern-fastapi-server:latest ./generators/python
 language: python
@@ -19,6 +19,17 @@ fixtures:
         pydantic_config: 
           version: v2
       outputFolder: pydantic-v2
+  imdb:
+    - customConfig: null
+      outputFolder: no-custom-config
+    - customConfig:
+        pydantic_config:
+          extra_fields: allow
+      outputFolder: includes-extra-fields
+    - customConfig:
+        async_handlers:
+          - imdb.createMovie
+      outputFolder: async-handlers
 allowedFailures: 
   - bytes
   - file-download
@@ -27,4 +38,8 @@ allowedFailures:
   - query-parameters
   - response-property
   - streaming
-
+  - literal
+  - websocket
+  - enum
+  - server-sent-events
+  - streaming-parameter

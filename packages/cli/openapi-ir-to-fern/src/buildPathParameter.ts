@@ -1,8 +1,9 @@
 import { RelativeFilePath } from "@fern-api/fs-utils";
+import { PathParameter } from "@fern-api/openapi-ir-sdk";
 import { RawSchemas } from "@fern-api/yaml-schema";
-import { PathParameter } from "@fern-fern/openapi-ir-model/finalIr";
 import { buildTypeReference } from "./buildTypeReference";
 import { OpenApiIrConverterContext } from "./OpenApiIrConverterContext";
+import { convertAvailability } from "./utils/convertAvailability";
 import { getTypeFromTypeReference } from "./utils/getTypeFromTypeReference";
 
 export function buildPathParameter({
@@ -19,7 +20,11 @@ export function buildPathParameter({
         context,
         fileContainingReference
     });
-    if (pathParameter.variableReference == null && pathParameter.description == null) {
+    if (
+        pathParameter.variableReference == null &&
+        pathParameter.description == null &&
+        pathParameter.availability == null
+    ) {
         return getTypeFromTypeReference(typeReference);
     }
     const pathParameterSchema: RawSchemas.HttpPathParameterSchema =
@@ -34,5 +39,9 @@ export function buildPathParameter({
     if (pathParameter.description != null) {
         pathParameterSchema.docs = pathParameter.description;
     }
+    if (pathParameter.availability != null) {
+        pathParameterSchema.availability = convertAvailability(pathParameter.availability);
+    }
+
     return pathParameterSchema;
 }

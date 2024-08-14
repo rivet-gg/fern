@@ -3,15 +3,18 @@
  */
 package com.seed.examples.resources.health.service;
 
-import com.seed.examples.core.ApiError;
 import com.seed.examples.core.ClientOptions;
 import com.seed.examples.core.ObjectMappers;
 import com.seed.examples.core.RequestOptions;
+import com.seed.examples.core.SeedExamplesApiException;
+import com.seed.examples.core.SeedExamplesException;
 import java.io.IOException;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class ServiceClient {
     protected final ClientOptions clientOptions;
@@ -20,10 +23,16 @@ public class ServiceClient {
         this.clientOptions = clientOptions;
     }
 
+    /**
+     * This endpoint checks the health of a resource.
+     */
     public void check(String id) {
         check(id, null);
     }
 
+    /**
+     * This endpoint checks the health of a resource.
+     */
     public void check(String id, RequestOptions requestOptions) {
         HttpUrl httpUrl = HttpUrl.parse(this.clientOptions.environment().getUrl())
                 .newBuilder()
@@ -35,24 +44,35 @@ public class ServiceClient {
                 .method("GET", null)
                 .headers(Headers.of(clientOptions.headers(requestOptions)))
                 .build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
                 return;
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            throw new SeedExamplesApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedExamplesException("Network error executing HTTP request", e);
         }
     }
 
+    /**
+     * This endpoint checks the health of the service.
+     */
     public boolean ping() {
         return ping(null);
     }
 
+    /**
+     * This endpoint checks the health of the service.
+     */
     public boolean ping(RequestOptions requestOptions) {
         HttpUrl httpUrl = HttpUrl.parse(this.clientOptions.environment().getUrl())
                 .newBuilder()
@@ -64,17 +84,22 @@ public class ServiceClient {
                 .headers(Headers.of(clientOptions.headers(requestOptions)))
                 .addHeader("Content-Type", "application/json")
                 .build();
-        try {
-            Response response =
-                    clientOptions.httpClient().newCall(okhttpRequest).execute();
+        OkHttpClient client = clientOptions.httpClient();
+        if (requestOptions != null && requestOptions.getTimeout().isPresent()) {
+            client = clientOptions.httpClientWithTimeout(requestOptions);
+        }
+        try (Response response = client.newCall(okhttpRequest).execute()) {
+            ResponseBody responseBody = response.body();
             if (response.isSuccessful()) {
-                return ObjectMappers.JSON_MAPPER.readValue(response.body().string(), boolean.class);
+                return ObjectMappers.JSON_MAPPER.readValue(responseBody.string(), boolean.class);
             }
-            throw new ApiError(
+            String responseBodyString = responseBody != null ? responseBody.string() : "{}";
+            throw new SeedExamplesApiException(
+                    "Error with status code " + response.code(),
                     response.code(),
-                    ObjectMappers.JSON_MAPPER.readValue(response.body().string(), Object.class));
+                    ObjectMappers.JSON_MAPPER.readValue(responseBodyString, Object.class));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new SeedExamplesException("Network error executing HTTP request", e);
         }
     }
 }

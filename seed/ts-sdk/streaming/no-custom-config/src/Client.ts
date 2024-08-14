@@ -11,13 +11,18 @@ export declare namespace SeedStreamingClient {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class SeedStreamingClient {
-    constructor(protected readonly _options: SeedStreamingClient.Options) {}
+    constructor(protected readonly _options: SeedStreamingClient.Options) {
+    }
 
     protected _dummy: Dummy | undefined;
 

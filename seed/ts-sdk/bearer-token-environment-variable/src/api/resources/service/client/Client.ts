@@ -4,8 +4,8 @@
 
 import * as core from "../../../../core";
 import urlJoin from "url-join";
-import * as serializers from "../../../../serialization";
-import * as errors from "../../../../errors";
+import * as serializers from "../../../../serialization/index";
+import * as errors from "../../../../errors/index";
 
 export declare namespace Service {
     interface Options {
@@ -14,67 +14,73 @@ export declare namespace Service {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class Service {
-    constructor(protected readonly _options: Service.Options) {}
+    constructor(protected readonly _options: Service.Options) {
+    }
 
     /**
      * GET request with custom api key
+     *
+     * @param {Service.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @example
+     *     await client.service.getWithBearerToken()
      */
     public async getWithBearerToken(requestOptions?: Service.RequestOptions): Promise<string> {
         const _response = await core.fetcher({
             url: urlJoin(await core.Supplier.get(this._options.environment), "apiKey"),
             method: "GET",
             headers: {
-                Authorization: await this._getAuthorizationHeader(),
+                "Authorization": await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-Fern-SDK-Name": "",
+                "X-Fern-SDK-Name": "@fern/bearer-token-environment-variable",
                 "X-Fern-SDK-Version": "0.0.1",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version
             },
             contentType: "application/json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 60000,
+            requestType: "json",
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? (requestOptions.timeoutInSeconds * 1000) : 60000,
             maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal
         });
         if (_response.ok) {
-            return await serializers.service.getWithBearerToken.Response.parseOrThrow(_response.body, {
-                unrecognizedObjectKeys: "passthrough",
-                allowUnrecognizedUnionMembers: true,
-                allowUnrecognizedEnumValues: true,
-                breadcrumbsPrefix: ["response"],
-            });
+            return serializers.service.getWithBearerToken.Response.parseOrThrow(_response.body, { unrecognizedObjectKeys: "passthrough", allowUnrecognizedUnionMembers: true, allowUnrecognizedEnumValues: true, breadcrumbsPrefix: ["response"] });
         }
 
         if (_response.error.reason === "status-code") {
             throw new errors.SeedBearerTokenEnvironmentVariableError({
                 statusCode: _response.error.statusCode,
-                body: _response.error.body,
+                body: _response.error.body
             });
         }
 
         switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.SeedBearerTokenEnvironmentVariableError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.SeedBearerTokenEnvironmentVariableTimeoutError();
-            case "unknown":
-                throw new errors.SeedBearerTokenEnvironmentVariableError({
-                    message: _response.error.errorMessage,
-                });
+            case "non-json": throw new errors.SeedBearerTokenEnvironmentVariableError({
+                statusCode: _response.error.statusCode,
+                body: _response.error.rawBody
+            });
+            case "timeout": throw new errors.SeedBearerTokenEnvironmentVariableTimeoutError;
+            case "unknown": throw new errors.SeedBearerTokenEnvironmentVariableError({
+                message: _response.error.errorMessage
+            });
         }
     }
 
-    protected async _getAuthorizationHeader() {
-        const bearer = (await core.Supplier.get(this._options.apiKey)) ?? process.env["COURIER_API_KEY"];
+    protected async _getAuthorizationHeader(): Promise<string> {
+        const bearer = (await core.Supplier.get(this._options.apiKey)) ?? process?.env["COURIER_API_KEY"];
         if (bearer == null) {
             throw new errors.SeedBearerTokenEnvironmentVariableError({
-                message: "Please specify COURIER_API_KEY when instantiating the client.",
+                message: "Please specify COURIER_API_KEY when instantiating the client."
             });
         }
 

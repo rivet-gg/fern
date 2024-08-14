@@ -1,5 +1,11 @@
 * @dsinghvi
-/packages/generators/cli/* @armandobelardo
-/packages/generators/commons/* @armandobelardo
-/packages/generators/docker/* @armandobelardo
+fern/* @dsinghvi
+generators/go/* @amckinney
+generators/java/* @dcb6
+generators/csharp/* @dcb6
+generators/python/* @armandobelardo
 generators/ruby/* @armandobelardo
+generators/typescript/* @dsinghvi
+packages/cli/* @amckinney
+packages/generators/cli/* @armandobelardo
+packages/generators/docker/* @armandobelardo

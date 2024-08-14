@@ -1,11 +1,12 @@
-import { AbsoluteFilePath, doesPathExist, join, RelativeFilePath } from "@fern-api/fs-utils";
-import { DEFAULT_GROUP_NAME, GeneratorsConfigurationSchema } from "@fern-api/generators-configuration";
 import {
+    DEFAULT_GROUP_NAME,
     DEFINITION_DIRECTORY,
+    generatorsYml,
     GENERATORS_CONFIGURATION_FILENAME,
     OPENAPI_DIRECTORY,
     ROOT_API_FILENAME
-} from "@fern-api/project-configuration";
+} from "@fern-api/configuration";
+import { AbsoluteFilePath, doesPathExist, join, RelativeFilePath } from "@fern-api/fs-utils";
 import { formatDefinitionFile } from "@fern-api/yaml-formatter";
 import { RootApiFileSchema } from "@fern-api/yaml-schema";
 import { mkdir, readFile, writeFile } from "fs/promises";
@@ -50,26 +51,29 @@ export async function createOpenAPIWorkspace({
     await writeFile(join(openapiDirectory, RelativeFilePath.of(openAPIfilename)), openAPIContents);
 }
 
-const GENERATORS_CONFIGURATION: GeneratorsConfigurationSchema = {
-    "default-group": DEFAULT_GROUP_NAME,
-    groups: {
-        [DEFAULT_GROUP_NAME]: {
-            generators: [
-                {
-                    name: "fernapi/fern-typescript-node-sdk",
-                    version: "0.9.5",
-                    output: {
-                        location: "local-file-system",
-                        path: "../generated/sdks/typescript"
+async function getDefaultGeneratorsConfiguration(): Promise<generatorsYml.GeneratorsConfigurationSchema> {
+    const defaultGeneratorName = "fernapi/fern-typescript-node-sdk";
+    const fallbackInvocation = generatorsYml.GENERATOR_INVOCATIONS[defaultGeneratorName];
+    return {
+        "default-group": DEFAULT_GROUP_NAME,
+        groups: {
+            [DEFAULT_GROUP_NAME]: {
+                generators: [
+                    {
+                        name: defaultGeneratorName,
+                        ...fallbackInvocation,
+                        version:
+                            (await generatorsYml.getLatestGeneratorVersion(defaultGeneratorName)) ??
+                            fallbackInvocation.version
                     }
-                }
-            ]
+                ]
+            }
         }
-    }
-};
+    };
+}
 
 async function writeGeneratorsConfiguration({ filepath }: { filepath: AbsoluteFilePath }): Promise<void> {
-    await writeFile(filepath, yaml.dump(GENERATORS_CONFIGURATION));
+    await writeFile(filepath, yaml.dump(await getDefaultGeneratorsConfiguration()));
 }
 
 const ROOT_API: RootApiFileSchema = {

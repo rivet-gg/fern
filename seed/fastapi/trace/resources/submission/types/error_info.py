@@ -2,40 +2,63 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
+import pydantic
 import typing_extensions
 
-from ....core.datetime_utils import serialize_datetime
+from ....core.pydantic_utilities import IS_PYDANTIC_V2, UniversalRootModel, update_forward_refs
 from .compile_error import CompileError as resources_submission_types_compile_error_CompileError
 from .internal_error import InternalError as resources_submission_types_internal_error_InternalError
 from .runtime_error import RuntimeError as resources_submission_types_runtime_error_RuntimeError
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
 T_Result = typing.TypeVar("T_Result")
 
 
 class _Factory:
     def compile_error(self, value: resources_submission_types_compile_error_CompileError) -> ErrorInfo:
-        return ErrorInfo(__root__=_ErrorInfo.CompileError(**value.dict(exclude_unset=True), type="compileError"))
+        if IS_PYDANTIC_V2:
+            return ErrorInfo(root=_ErrorInfo.CompileError(**value.dict(exclude_unset=True), type="compileError"))
+        else:
+            return ErrorInfo(__root__=_ErrorInfo.CompileError(**value.dict(exclude_unset=True), type="compileError"))
 
     def runtime_error(self, value: resources_submission_types_runtime_error_RuntimeError) -> ErrorInfo:
-        return ErrorInfo(__root__=_ErrorInfo.RuntimeError(**value.dict(exclude_unset=True), type="runtimeError"))
+        if IS_PYDANTIC_V2:
+            return ErrorInfo(root=_ErrorInfo.RuntimeError(**value.dict(exclude_unset=True), type="runtimeError"))
+        else:
+            return ErrorInfo(__root__=_ErrorInfo.RuntimeError(**value.dict(exclude_unset=True), type="runtimeError"))
 
     def internal_error(self, value: resources_submission_types_internal_error_InternalError) -> ErrorInfo:
-        return ErrorInfo(__root__=_ErrorInfo.InternalError(**value.dict(exclude_unset=True), type="internalError"))
+        if IS_PYDANTIC_V2:
+            return ErrorInfo(root=_ErrorInfo.InternalError(**value.dict(exclude_unset=True), type="internalError"))
+        else:
+            return ErrorInfo(__root__=_ErrorInfo.InternalError(**value.dict(exclude_unset=True), type="internalError"))
 
 
-class ErrorInfo(pydantic.BaseModel):
+class ErrorInfo(UniversalRootModel):
     factory: typing.ClassVar[_Factory] = _Factory()
 
-    def get_as_union(self) -> typing.Union[_ErrorInfo.CompileError, _ErrorInfo.RuntimeError, _ErrorInfo.InternalError]:
-        return self.__root__
+    if IS_PYDANTIC_V2:
+        root: typing_extensions.Annotated[
+            typing.Union[_ErrorInfo.CompileError, _ErrorInfo.RuntimeError, _ErrorInfo.InternalError],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[_ErrorInfo.CompileError, _ErrorInfo.RuntimeError, _ErrorInfo.InternalError]:
+            return self.root
+
+    else:
+        __root__: typing_extensions.Annotated[
+            typing.Union[_ErrorInfo.CompileError, _ErrorInfo.RuntimeError, _ErrorInfo.InternalError],
+            pydantic.Field(discriminator="type"),
+        ]
+
+        def get_as_union(
+            self,
+        ) -> typing.Union[_ErrorInfo.CompileError, _ErrorInfo.RuntimeError, _ErrorInfo.InternalError]:
+            return self.__root__
 
     def visit(
         self,
@@ -43,61 +66,36 @@ class ErrorInfo(pydantic.BaseModel):
         runtime_error: typing.Callable[[resources_submission_types_runtime_error_RuntimeError], T_Result],
         internal_error: typing.Callable[[resources_submission_types_internal_error_InternalError], T_Result],
     ) -> T_Result:
-        if self.__root__.type == "compileError":
+        unioned_value = self.get_as_union()
+        if unioned_value.type == "compileError":
             return compile_error(
                 resources_submission_types_compile_error_CompileError(
-                    **self.__root__.dict(exclude_unset=True, exclude={"type"})
+                    **unioned_value.dict(exclude_unset=True, exclude={"type"})
                 )
             )
-        if self.__root__.type == "runtimeError":
+        if unioned_value.type == "runtimeError":
             return runtime_error(
                 resources_submission_types_runtime_error_RuntimeError(
-                    **self.__root__.dict(exclude_unset=True, exclude={"type"})
+                    **unioned_value.dict(exclude_unset=True, exclude={"type"})
                 )
             )
-        if self.__root__.type == "internalError":
+        if unioned_value.type == "internalError":
             return internal_error(
                 resources_submission_types_internal_error_InternalError(
-                    **self.__root__.dict(exclude_unset=True, exclude={"type"})
+                    **unioned_value.dict(exclude_unset=True, exclude={"type"})
                 )
             )
-
-    __root__: typing_extensions.Annotated[
-        typing.Union[_ErrorInfo.CompileError, _ErrorInfo.RuntimeError, _ErrorInfo.InternalError],
-        pydantic.Field(discriminator="type"),
-    ]
-
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
-
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        extra = pydantic.Extra.forbid
-        json_encoders = {dt.datetime: serialize_datetime}
 
 
 class _ErrorInfo:
     class CompileError(resources_submission_types_compile_error_CompileError):
-        type: typing_extensions.Literal["compileError"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["compileError"] = "compileError"
 
     class RuntimeError(resources_submission_types_runtime_error_RuntimeError):
-        type: typing_extensions.Literal["runtimeError"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["runtimeError"] = "runtimeError"
 
     class InternalError(resources_submission_types_internal_error_InternalError):
-        type: typing_extensions.Literal["internalError"]
-
-        class Config:
-            allow_population_by_field_name = True
+        type: typing.Literal["internalError"] = "internalError"
 
 
-ErrorInfo.update_forward_refs()
+update_forward_refs(ErrorInfo)

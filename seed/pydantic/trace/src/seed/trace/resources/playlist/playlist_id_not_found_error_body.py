@@ -4,19 +4,13 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
-
+from ...core.pydantic_utilities import UniversalBaseModel
 from .playlist_id import PlaylistId
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
-
-class PlaylistIdNotFoundErrorBody_PlaylistId(pydantic.BaseModel):
-    type: typing_extensions.Literal["playlistId"]
+class PlaylistIdNotFoundErrorBody_PlaylistId(UniversalBaseModel):
     value: PlaylistId
+    type: typing.Literal["playlistId"] = "playlistId"
 
 
-PlaylistIdNotFoundErrorBody = typing.Union[PlaylistIdNotFoundErrorBody_PlaylistId]
+PlaylistIdNotFoundErrorBody = PlaylistIdNotFoundErrorBody_PlaylistId

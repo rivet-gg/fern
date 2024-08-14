@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Set
+from typing import Optional, Set
 
 from fern.generator_exec.resources import GeneratorUpdate, LogLevel, LogUpdate
 
@@ -19,12 +19,10 @@ class SourceFileFactory:
         project: Project,
         filepath: Filepath,
         generator_exec_wrapper: GeneratorExecWrapper,
+        from_src: Optional[bool] = True,
     ) -> SourceFile:
-        SourceFileFactory._log_generating_file_update(
-            filepath=filepath,
-            generator_exec_wrapper=generator_exec_wrapper,
-        )
-        return project.source_file(filepath=filepath)
+        SourceFileFactory._log_generating_file_update(filepath=filepath, generator_exec_wrapper=generator_exec_wrapper)
+        return project.source_file(filepath=filepath, from_src=from_src)
 
     @staticmethod
     def create_snippet() -> SourceFile:
@@ -41,12 +39,20 @@ class SourceFileFactory:
 
     @staticmethod
     def add_source_file_from_disk(
-        *, project: Project, path_on_disk: str, filepath_in_project: Filepath, exports: Set[str]
+        *,
+        project: Project,
+        path_on_disk: str,
+        filepath_in_project: Filepath,
+        exports: Set[str],
+        include_src_root: Optional[bool] = True,
+        string_replacements: Optional[dict[str, str]] = None,
     ) -> None:
         project.add_source_file_from_disk(
             path_on_disk=path_on_disk,
             filepath_in_project=filepath_in_project,
             exports=exports,
+            include_src_root=include_src_root,
+            string_replacements=string_replacements,
         )
 
     @staticmethod

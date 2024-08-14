@@ -54,13 +54,16 @@ type Config struct {
 	DryRun                     bool
 	EnableExplicitNull         bool
 	IncludeLegacyClientOptions bool
+	Whitelabel                 bool
 	Organization               string
 	CoordinatorURL             string
 	CoordinatorTaskID          string
 	Version                    string
 	IrFilepath                 string
+	SnippetFilepath            string
 	ImportPath                 string
 	PackageName                string
+	UnionVersion               string
 	Module                     *generator.ModuleConfig
 	Writer                     *writer.Config
 }
@@ -178,6 +181,7 @@ func newConfig(configFilename string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var (
 		coordinatorURL    string
 		coordinatorTaskID string
@@ -186,17 +190,26 @@ func newConfig(configFilename string) (*Config, error) {
 		coordinatorURL = config.Environment.Remote.CoordinatorUrlV2
 		coordinatorTaskID = config.Environment.Remote.Id
 	}
+
+	var snippetFilepath string
+	if config.Output != nil && config.Output.SnippetFilepath != nil {
+		snippetFilepath = *config.Output.SnippetFilepath
+	}
+
 	return &Config{
 		DryRun:                     config.DryRun,
 		IncludeLegacyClientOptions: customConfig.IncludeLegacyClientOptions,
 		EnableExplicitNull:         customConfig.EnableExplicitNull,
 		Organization:               config.Organization,
+		Whitelabel:                 config.Whitelabel,
 		CoordinatorURL:             coordinatorURL,
 		CoordinatorTaskID:          coordinatorTaskID,
 		Version:                    outputVersionFromGeneratorConfig(config),
 		IrFilepath:                 config.IrFilepath,
+		SnippetFilepath:            snippetFilepath,
 		ImportPath:                 customConfig.ImportPath,
 		PackageName:                customConfig.PackageName,
+		UnionVersion:               customConfig.UnionVersion,
 		Module:                     moduleConfig,
 		Writer:                     writerConfig,
 	}, nil
@@ -241,6 +254,7 @@ type customConfig struct {
 	IncludeLegacyClientOptions bool          `json:"includeLegacyClientOptions,omitempty"`
 	ImportPath                 string        `json:"importPath,omitempty"`
 	PackageName                string        `json:"packageName,omitempty"`
+	UnionVersion               string        `json:"union,omitempty"`
 	Module                     *moduleConfig `json:"module,omitempty"`
 }
 
@@ -258,6 +272,7 @@ func customConfigFromConfig(c *generatorexec.GeneratorConfig) (*customConfig, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize custom configuration: %v", err)
 	}
+
 	// We use a custom decoder here to validate the custom configuration fields.
 	decoder := json.NewDecoder(bytes.NewReader(configBytes))
 	decoder.DisallowUnknownFields()

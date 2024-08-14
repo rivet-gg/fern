@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from functools import cmp_to_key
 from typing import DefaultDict, List, Optional, Sequence, Set, Tuple
 
+import pydantic
+
 from . import AST
 from .filepath import ExportStrategy, Filepath
 from .writer_impl import WriterImpl
@@ -11,9 +13,19 @@ from .writer_impl import WriterImpl
 RelativeModulePath = Tuple[str, ...]
 
 
+class ModuleExport(pydantic.BaseModel):
+    from_: str = pydantic.Field(alias="from")
+    imports: List[str]
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
+
+
 @dataclass
 class ModuleInfo:
     exports: DefaultDict[RelativeModulePath, Set[str]]
+    from_src: bool = True
 
 
 def create_empty_module_info() -> ModuleInfo:
@@ -38,7 +50,11 @@ class ModuleManager:
         self._should_format = should_format
         self._sorted_modules = sorted_modules or []
 
-    def register_exports(self, filepath: Filepath, exports: Set[str]) -> None:
+    def register_additional_exports(self, path: AST.ModulePath, exports: List[ModuleExport]) -> None:
+        for export in exports:
+            self._module_infos[path].exports[(export.from_,)].update(export.imports)
+
+    def register_exports(self, filepath: Filepath, exports: Set[str], from_src: Optional[bool] = True) -> None:
         module_being_exported_from: AST.ModulePath = tuple(
             directory.module_name for directory in filepath.directories
         ) + (filepath.file.module_name,)
@@ -49,6 +65,10 @@ class ModuleManager:
             relative_module_being_exported_from = module_being_exported_from[-1:]
             exporting_module = module_being_exported_from[:-1]
             module_info = self._module_infos[exporting_module]
+
+            # This is a bit odd, but it stops from claiming the root level init.py lives outside src
+            from_src = from_src if from_src is not None and len(module_being_exported_from) > 1 else True
+            module_info.from_src = from_src
             export_strategy = (
                 ExportStrategy(export_all=True)
                 if is_exporting_from_file
@@ -72,7 +92,7 @@ class ModuleManager:
             module_being_exported_from = exporting_module
             is_exporting_from_file = False
 
-    def write_modules(self, filepath: str) -> None:
+    def write_modules(self, base_filepath: str, filepath: str) -> None:
         for module, module_info in self._module_infos.items():
             writer = WriterImpl(
                 should_format=self._should_format,
@@ -89,7 +109,9 @@ class ModuleManager:
                     all_exports.update(module_exports_line.exports)
             if len(all_exports) > 0:
                 writer.write_line("__all__ = [" + ", ".join(f'"{export}"' for export in sorted(all_exports)) + "]")
-            writer.write_to_file(os.path.join(filepath, *module, "__init__.py"))
+            writer.write_to_file(
+                os.path.join(filepath if module_info.from_src else base_filepath, *module, "__init__.py")
+            )
 
     def _build_sorted_exports(self, module_info: ModuleInfo) -> List[ModuleExportsLine]:
         modules = [

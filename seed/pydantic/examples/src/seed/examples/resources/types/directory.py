@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
-from ...core.datetime_utils import serialize_datetime
+import pydantic
+
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, update_forward_refs
 from .file import File
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
 
-
-class Directory(pydantic.BaseModel):
+class Directory(UniversalBaseModel):
     """
-    from seed.examples import Directory, File
+    Examples
+    --------
+    from seed.examples.resources import Directory, File
 
     Directory(
         name="root",
@@ -41,19 +39,15 @@ class Directory(pydantic.BaseModel):
     """
 
     name: str
-    files: typing.Optional[typing.List[File]]
-    directories: typing.Optional[typing.List["Directory"]]
+    files: typing.Optional[typing.List[File]] = None
+    directories: typing.Optional[typing.List[Directory]] = None
 
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
 
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        json_encoders = {dt.datetime: serialize_datetime}
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-Directory.update_forward_refs(Directory=Directory)
+update_forward_refs(Directory)

@@ -13,13 +13,18 @@ export declare namespace SeedSingleUrlEnvironmentDefaultClient {
     }
 
     interface RequestOptions {
+        /** The maximum time to wait for a response in seconds. */
         timeoutInSeconds?: number;
+        /** The number of times to retry the request. Defaults to 2. */
         maxRetries?: number;
+        /** A hook to abort the request. */
+        abortSignal?: AbortSignal;
     }
 }
 
 export class SeedSingleUrlEnvironmentDefaultClient {
-    constructor(protected readonly _options: SeedSingleUrlEnvironmentDefaultClient.Options) {}
+    constructor(protected readonly _options: SeedSingleUrlEnvironmentDefaultClient.Options) {
+    }
 
     protected _dummy: Dummy | undefined;
 

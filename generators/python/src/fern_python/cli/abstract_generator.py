@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, Tuple
+from typing import Literal, Optional, Sequence, Tuple, cast
 
 import fern.ir.resources as ir_types
-from fern.generator_exec.resources import GeneratorConfig
+from fern.generator_exec.resources import GeneratorConfig, PypiMetadata
 from fern.generator_exec.resources.config import (
     GeneratorPublishConfig,
     GithubOutputMode,
+    PypiGithubPublishInfo,
 )
 
 from fern_python.codegen.project import Project, ProjectConfig
@@ -35,6 +36,14 @@ class AbstractGenerator(ABC):
             ),
             github=lambda github_output_mode: self._get_github_publish_config(generator_config, github_output_mode),
         )
+        maybe_github_output_mode = generator_config.output.mode.visit(
+            download_files=lambda: None,
+            publish=lambda _: None,
+            github=lambda github_output_mode: github_output_mode,
+        )
+        python_version = "^3.8"
+        if generator_config.custom_config is not None and "pyproject_python_version" in generator_config.custom_config:
+            python_version = generator_config.custom_config.get("pyproject_python_version")
         with Project(
             filepath=generator_config.output.path,
             relative_path_to_project=os.path.join(
@@ -50,6 +59,10 @@ class AbstractGenerator(ABC):
             sorted_modules=self.get_sorted_modules(),
             flat_layout=self.is_flat_layout(generator_config=generator_config),
             whitelabel=generator_config.whitelabel,
+            python_version=python_version,
+            pypi_metadata=self._get_pypi_metadata(generator_config=generator_config),
+            github_output_mode=maybe_github_output_mode,
+            license_=generator_config.license,
         ) as project:
             self.run(
                 generator_exec_wrapper=generator_exec_wrapper, ir=ir, generator_config=generator_config, project=project
@@ -58,7 +71,9 @@ class AbstractGenerator(ABC):
             generator_config.output.mode.visit(
                 download_files=lambda: None,
                 github=lambda github_output_mode: self._write_files_for_github_repo(
-                    project=project, output_mode=github_output_mode
+                    project=project,
+                    output_mode=github_output_mode,
+                    write_unit_tests=(self.project_type() == "sdk" and generator_config.write_unit_tests),
                 ),
                 publish=lambda x: None,
             )
@@ -94,6 +109,15 @@ class AbstractGenerator(ABC):
             package_version=output_mode.version,
         )
 
+    def _get_pypi_metadata(self, generator_config: GeneratorConfig) -> Optional[PypiMetadata]:
+        return generator_config.output.mode.visit(
+            download_files=lambda: None,
+            publish=lambda publish: publish.registries_v_2.pypi.pypi_metadata,
+            github=lambda github: cast(PypiGithubPublishInfo, github.publish_info.get_as_union()).pypi_metadata
+            if github.publish_info is not None and github.publish_info.get_as_union().type == "pypi"
+            else None,
+        )
+
     def _poetry_install(
         self, *, generator_exec_wrapper: GeneratorExecWrapper, generator_config: GeneratorConfig
     ) -> None:
@@ -115,7 +139,9 @@ class AbstractGenerator(ABC):
         )
         publisher.publish_package(publish_config=publish_config)
 
-    def _write_files_for_github_repo(self, project: Project, output_mode: GithubOutputMode) -> None:
+    def _write_files_for_github_repo(
+        self, project: Project, output_mode: GithubOutputMode, write_unit_tests: bool
+    ) -> None:
         project.add_file(
             ".gitignore",
             """dist/
@@ -124,12 +150,11 @@ __pycache__/
 poetry.toml
 """,
         )
-        project.add_file(".github/workflows/ci.yml", self._get_github_workflow(output_mode))
-        project.add_file("tests/__init__.py", "")
-        project.add_file("tests/test_client.py", self._get_client_test())
+        project.add_file(".github/workflows/ci.yml", self._get_github_workflow(output_mode, write_unit_tests))
+        project.add_file("tests/custom/test_client.py", self._get_client_test())
 
-    def _get_github_workflow(self, output_mode: GithubOutputMode) -> str:
-        workflow_yaml = """name: ci
+    def _get_github_workflow(self, output_mode: GithubOutputMode, write_unit_tests: bool) -> str:
+        workflow_yaml = f"""name: ci
 
 on: [push]
 jobs:
@@ -141,7 +166,7 @@ jobs:
       - name: Set up python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.8
       - name: Bootstrap poetry
         run: |
           curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
@@ -157,21 +182,35 @@ jobs:
       - name: Set up python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.8
       - name: Bootstrap poetry
         run: |
           curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
       - name: Install dependencies
         run: poetry install
+"""
+        if write_unit_tests:
+            workflow_yaml += """
+      - name: Install Fern
+        run: npm install -g fern-api
       - name: Test
-        run: poetry run pytest .
+        run: fern test --command "poetry run pytest -rP ."
+"""
+        else:
+            workflow_yaml += """
+      - name: Test
+        run: poetry run pytest ./tests/custom/
 """
         if output_mode.publish_info is not None:
             publish_info_union = output_mode.publish_info.get_as_union()
             if publish_info_union.type != "pypi":
                 raise RuntimeError("Publish info is for " + publish_info_union.type)
-
-            workflow_yaml += f"""
+            # First condition is for resilience in the event that Fiddle isn't upgraded to include the new flag
+            if (
+                publish_info_union.should_generate_publish_workflow is None
+                or publish_info_union.should_generate_publish_workflow
+            ):
+                workflow_yaml += f"""
   publish:
     needs: [compile, test]
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
@@ -182,7 +221,7 @@ jobs:
       - name: Set up python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.8
       - name: Bootstrap poetry
         run: |
           curl -sSL https://install.python-poetry.org | python - -y --version 1.5.1
@@ -206,6 +245,10 @@ jobs:
 def test_client() -> None:
     assert True == True
 """
+
+    @abstractmethod
+    def project_type(self) -> Literal["sdk", "pydantic", "fastapi"]:
+        ...
 
     @abstractmethod
     def run(

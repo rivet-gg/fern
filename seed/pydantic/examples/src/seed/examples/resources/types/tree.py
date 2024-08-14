@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import typing
 
-from ...core.datetime_utils import serialize_datetime
+import pydantic
 
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel, update_forward_refs
 
 
-class Tree(pydantic.BaseModel):
+class Tree(UniversalBaseModel):
     """
-    from seed.examples import Node, Tree
+    Examples
+    --------
+    from seed.examples.resources import Node, Tree
 
     Tree(
         nodes=[
@@ -29,20 +27,16 @@ class Tree(pydantic.BaseModel):
     )
     """
 
-    nodes: typing.Optional[typing.List["Node"]]
+    nodes: typing.Optional[typing.List[Node]] = None
 
-    def json(self, **kwargs: typing.Any) -> str:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().json(**kwargs_with_defaults)
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
 
-    def dict(self, **kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
-        kwargs_with_defaults: typing.Any = {"by_alias": True, "exclude_unset": True, **kwargs}
-        return super().dict(**kwargs_with_defaults)
-
-    class Config:
-        json_encoders = {dt.datetime: serialize_datetime}
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 from .node import Node  # noqa: E402
 
-Tree.update_forward_refs(Node=Node)
+update_forward_refs(Tree)

@@ -4,32 +4,64 @@ from __future__ import annotations
 
 import typing
 
-import typing_extensions
+import pydantic
 
-from .exception_info import ExceptionInfo
-
-try:
-    import pydantic.v1 as pydantic  # type: ignore
-except ImportError:
-    import pydantic  # type: ignore
+from ...core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 
-class Exception_Generic(ExceptionInfo):
-    type: typing_extensions.Literal["generic"]
+class Exception_Generic(UniversalBaseModel):
+    """
+    Examples
+    --------
+    from seed.examples.resources import Exception_Generic
 
-    class Config:
-        allow_population_by_field_name = True
+    Exception_Generic(
+        exception_type="Unavailable",
+        exception_message="This component is unavailable!",
+        exception_stacktrace="<logs>",
+    )
+    """
+
+    type: typing.Literal["generic"] = "generic"
+    exception_type: str = pydantic.Field(alias="exceptionType")
+    exception_message: str = pydantic.Field(alias="exceptionMessage")
+    exception_stacktrace: str = pydantic.Field(alias="exceptionStacktrace")
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
-class Exception_Timeout(pydantic.BaseModel):
-    type: typing_extensions.Literal["timeout"]
+class Exception_Timeout(UniversalBaseModel):
+    """
+    Examples
+    --------
+    from seed.examples.resources import Exception_Generic
+
+    Exception_Generic(
+        exception_type="Unavailable",
+        exception_message="This component is unavailable!",
+        exception_stacktrace="<logs>",
+    )
+    """
+
+    type: typing.Literal["timeout"] = "timeout"
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow")  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            extra = pydantic.Extra.allow
 
 
 """
-from seed.examples import Exception_Generic
+from seed.examples.resources import Exception_Generic
 
 Exception_Generic(
-    type="generic",
     exception_type="Unavailable",
     exception_message="This component is unavailable!",
     exception_stacktrace="<logs>",

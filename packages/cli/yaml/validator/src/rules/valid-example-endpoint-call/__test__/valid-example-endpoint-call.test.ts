@@ -278,7 +278,7 @@ describe("valid-example-endpoint-call", () => {
                 severity: "error"
             },
             {
-                message: 'Example is missing required property "bar"',
+                message: 'Example is missing required property "request.bar"',
                 nodePath: [
                     "service",
                     "endpoints",
@@ -293,8 +293,7 @@ describe("valid-example-endpoint-call", () => {
                 severity: "error"
             },
             {
-                message:
-                    'Example is missing required property "foo". <Inlined Request> -> (extends) ObjectWithFoo -> foo',
+                message: 'Example is missing required property "request.foo"',
                 nodePath: [
                     "service",
                     "endpoints",
@@ -479,6 +478,21 @@ describe("valid-example-endpoint-call", () => {
         });
 
         const expectedViolations: ValidationViolation[] = [];
+        expect(violations).toEqual(expectedViolations);
+    });
+
+    it("server-sent-events", async () => {
+        const violations = await getViolationsForRule({
+            rule: ValidExampleEndpointCallRule,
+            absolutePathToWorkspace: join(
+                AbsoluteFilePath.of(__dirname),
+                RelativeFilePath.of("fixtures"),
+                RelativeFilePath.of("server-sent-events")
+            )
+        });
+
+        const expectedViolations: ValidationViolation[] = [];
+
         expect(violations).toEqual(expectedViolations);
     });
 });
